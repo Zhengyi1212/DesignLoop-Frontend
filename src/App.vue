@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onBeforeUnmount } from 'vue';
+import { ref, onBeforeUnmount, defineAsyncComponent } from 'vue';
 import { VueFlow, useVueFlow, applyEdgeChanges } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
@@ -7,9 +7,13 @@ import { MiniMap } from '@vue-flow/minimap';
 
 import InstructionPanel from './components/InstructionPanel.vue';
 import Toolbar from './components/Toolbar.vue';
-import CustomNode from './components/CustomNode.vue';
 import CustomEdge from './components/CustomEdge.vue';
 import SubCanvas from './components/SubCanvas.vue';
+
+// Asynchronously load node components for better performance
+const CustomNode = defineAsyncComponent(() => import('./components/CustomNode.vue'));
+const RunNode = defineAsyncComponent(() => import('./components/RunNode.vue'));
+
 
 let nodeIdCounter = 0;
 
@@ -25,13 +29,19 @@ const instructionPanels = ref([
 ]);
 const isGenerating = ref(false);
 const isFetchingPipeline = ref(false);
-const isAddingNode = ref(false);
 
+// State for adding new nodes
+const isAddingNode = ref(false);
+const isAddingRunNode = ref(false);
+
+// State for node appearance and behavior
 const newNodeColor = ref('#34495e');
+const runningNodeId = ref(null); // This will hold the ID of the node that is currently "running"
 
 const vueFlowRef = ref(null);
 
-// --- New Feature: Function to handle data updates from nodes ---
+// --- Event Handlers ---
+
 function handleNodeUpdate(event) {
   const node = findNode(event.id);
   if (node) {
@@ -40,8 +50,121 @@ function handleNodeUpdate(event) {
   }
 }
 
+// Helper function to find all successors of a node and their levels
+function findSuccessors(startNodeId, allNodes, allEdges) {
+  console.log('%c[Debug] Starting successor search for node:', 'color: blue; font-weight: bold;', startNodeId);
+
+  let successors = [];
+  let directSuccessors = new Map();
+
+  // First, find all direct successors (nodes at level 1)
+  allEdges.forEach(edge => {
+    if (edge.source === startNodeId) {
+      if (!directSuccessors.has(edge.target)) {
+        const directNode = allNodes.find(n => n.id === edge.target);
+        if (directNode) {
+          directSuccessors.set(edge.target, { node: directNode, level: 1 });
+        }
+      }
+    }
+  });
+
+  console.log('%c[Debug] Found direct successors:', 'color: blue;', Array.from(directSuccessors.keys()));
+
+  // Process each direct successor path individually
+  for (let [directSuccessorId, { node, level }] of directSuccessors) {
+    let queue = [{ nodeId: directSuccessorId, level: level }];
+    // Use a Set to track visited nodes for the current path to handle complex graphs/cycles
+    let visitedInPath = new Set([startNodeId]);
+
+    while (queue.length > 0) {
+      const { nodeId: currentId, level: currentLevel } = queue.shift();
+      
+      if (visitedInPath.has(currentId)) continue;
+      visitedInPath.add(currentId);
+      
+      const currentNode = allNodes.find(n => n.id === currentId);
+      if (currentNode) {
+        const content = currentNode.data.content || '';
+        
+        // --- FIX: Only add successors that have meaningful content ---
+        // This prevents sending empty or default text to the backend.
+        const placeholderTexts = ['Click to edit...', 'Ready to run...', ''];
+        if (content && !placeholderTexts.includes(content.trim())) {
+            successors.push({
+              level: currentLevel,
+              content: content
+            });
+        }
+
+        const outgoingEdges = allEdges.filter(edge => edge.source === currentId);
+        for (const edge of outgoingEdges) {
+          queue.push({ nodeId: edge.target, level: currentLevel + 1 });
+        }
+      }
+    }
+  }
+  
+  // Remove duplicates that might occur in complex graph structures and sort by level
+  const uniqueSuccessors = Array.from(new Map(successors.map(s => [s.content, s])).values())
+                                .sort((a, b) => a.level - b.level);
+  
+  console.log('%c[Debug] Final successors list to be sent:', 'color: green; font-weight: bold;', uniqueSuccessors);
+  return uniqueSuccessors;
+}
+
+
+
+// Handles the 'run' event from RunNode, now with logic to find successors
+async function handleNodeRun(nodeId) {
+    const node = findNode(nodeId);
+    if (!node || runningNodeId.value) return; // Prevent multiple runs at once
+
+    runningNodeId.value = nodeId; // Set the current node as running to show the spinner
+    node.data.content = 'Running...'; // Provide immediate feedback
+
+    // Find all successors and their levels
+    const successors = findSuccessors(nodeId, getNodes.value, edges.value);
+
+    try {
+        const url = "http://127.0.0.1:7001/single-node-regen";
+        const payload = {
+            design_background: instructionPanels.value[1].content,
+            design_goal: instructionPanels.value[2].content,
+            node_title: node.data.title,
+            successors: successors,
+        };
+
+        console.log('%c[Debug] Payload to be sent to backend:', 'color: orange; font-weight: bold;', payload);
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: response.statusText }));
+            throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
+        }
+        const data = await response.json();
+        console.log('%c[Debug] Received response from backend:', 'color: green;', data);
+        
+        // The backend now returns { "output": "..." }
+        node.data.content = data.content; 
+    } catch (error) {
+        console.error("Error during run request:", error);
+        node.data.content = "Error: " + error.message;
+    } finally {
+        runningNodeId.value = null; // Reset the running state to hide the spinner
+    }
+}
+
+
+// --- "Add Node" Logic ---
+
 function placeNodeOnClick(event) {
-  if (!isAddingNode.value || event.target.closest('.vue-flow__controls')) {
+    const isRunNode = isAddingRunNode.value;
+  if ((!isAddingNode.value && !isRunNode) || event.target.closest('.vue-flow__controls')) {
     return;
   }
 
@@ -50,52 +173,73 @@ function placeNodeOnClick(event) {
 
   const newNode = {
     id: `node-${nodeIdCounter++}`,
-    type: 'custom',
+    type: isRunNode ? 'run' : 'custom',
     position: { ...ghostNode.position },
     data: {
-      title: '',
-      content: '', // Updated placeholder text
-      color: newNodeColor.value,
+      title: isRunNode ? 'Run Node' : 'New Node',
+      content: isRunNode ? 'Ready to run...' : 'Click to edit...',
+      color: isRunNode ? '#f1c40f' : newNodeColor.value,
       connections: { in: [], out: [] },
       subGraph: { nodes: [], edges: [] },
     },
   };
   addNodes([newNode]);
 
-  toggleAddNodeMode();
-}
-
-function toggleAddNodeMode() {
-  isAddingNode.value = !isAddingNode.value;
-
-  const flowElement = vueFlowRef.value?.$el;
-  if (!flowElement) return;
-
-  if (isAddingNode.value) {
-    flowElement.addEventListener('click', placeNodeOnClick, true);
+  if (isRunNode) {
+      toggleAddRunNodeMode();
   } else {
-    flowElement.removeEventListener('click', placeNodeOnClick, true);
-    removeNodes(['ghost-node']);
+      toggleAddNodeMode();
   }
 }
 
+function toggleAddNodeMode() {
+  if (isAddingRunNode.value) isAddingRunNode.value = false;
+  isAddingNode.value = !isAddingNode.value;
+  updateEventListeners();
+}
+
+function toggleAddRunNodeMode() {
+    if (isAddingNode.value) isAddingNode.value = false;
+    isAddingRunNode.value = !isAddingRunNode.value;
+    updateEventListeners();
+}
+
+function updateEventListeners() {
+    const flowElement = vueFlowRef.value?.$el;
+    if (!flowElement) return;
+
+    flowElement.removeEventListener('click', placeNodeOnClick, true);
+    if (isAddingNode.value || isAddingRunNode.value) {
+        flowElement.addEventListener('click', placeNodeOnClick, true);
+    } else {
+        removeNodes(['ghost-node']);
+    }
+}
+
 onPaneMouseMove((event) => {
-  if (!isAddingNode.value) return;
+  if (!isAddingNode.value && !isAddingRunNode.value) return;
+
   const position = project({ x: event.clientX, y: event.clientY });
   const ghostNode = findNode('ghost-node');
+
+  const isRunNode = isAddingRunNode.value;
+  const ghostData = {
+      title: isRunNode ? 'Run Node' : 'New Node',
+      content: 'Click to place',
+      color: isRunNode ? '#f1c40f' : newNodeColor.value
+  };
+  const ghostType = isRunNode ? 'run' : 'custom';
+
   if (ghostNode) {
     ghostNode.position = position;
-    ghostNode.data.color = newNodeColor.value;
+    ghostNode.data = ghostData;
+    ghostNode.type = ghostType;
   } else {
     addNodes([{
       id: 'ghost-node',
-      type: 'custom',
+      type: ghostType,
       position,
-      data: {
-        title: 'New Node',
-        content: 'Click to place',
-        color: newNodeColor.value
-      },
+      data: ghostData,
       class: 'ghost-node',
     }]);
   }
@@ -107,6 +251,9 @@ onBeforeUnmount(() => {
     flowElement.removeEventListener('click', placeNodeOnClick, true);
   }
 });
+
+
+// --- Other Existing Functions (unchanged) ---
 
 function isValidConnection(connection) { return connection.source !== connection.target; }
 
@@ -168,6 +315,7 @@ async function handleFetchPipeline() {
       design_background: instructionPanels.value[1].content,
       design_goal: instructionPanels.value[2].content,
     };
+    console.log("Payload: ",payload)
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -194,6 +342,10 @@ function node_chain_autogene(nodeData) {
     const newNode = {
       id: `chain-node-${nodeIdCounter++}`, type: 'custom',
       position: { x: startX + index * gapX, y: startY },
+      style: { 
+      width: '200px', 
+      height: '150px' 
+    },
       data: {
         title: data.pipeline_title || 'Untitled Node', content: data.pipeline_content || '',
         color: newNodeColor.value,
@@ -224,6 +376,7 @@ async function handleGeneration() {
       design_background: instructionPanels.value[1].content,
       design_goal:instructionPanels.value[2].content
     };
+    console.log("Payload: ",payload)
     const response = await fetch(url, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
     });
@@ -232,7 +385,10 @@ async function handleGeneration() {
         throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
     }
     const data = await response.json();
-    if (data && data.nodes) { node_chain_autogene(data.nodes); }
+    console.log(data)
+    if (data) { 
+      node_chain_autogene(data); 
+    }
   } catch (error) {
     console.error("Error during node chain request:", error);
   } finally {
@@ -300,12 +456,21 @@ function toggleFreeze() {
         </defs>
 
         <template #node-custom="props">
-          <!-- Listen for the new event here -->
           <CustomNode
             v-bind="props"
             @delete="onNodeDelete"
             @open-canvas="handleOpenSubCanvas"
             @update-node-data="handleNodeUpdate"
+          />
+        </template>
+        
+        <template #node-run="props">
+          <RunNode
+            v-bind="props"
+            @delete="onNodeDelete"
+            @open-canvas="handleOpenSubCanvas"
+            @run-node="handleNodeRun"
+            :is-running="props.id === runningNodeId"
           />
         </template>
 
@@ -320,9 +485,11 @@ function toggleFreeze() {
         <Toolbar
           :is-frozen="isFrozen"
           :is-adding-node="isAddingNode"
+          :is-adding-run-node="isAddingRunNode"
           v-model:newNodeColor="newNodeColor"
           @toggle-freeze="toggleFreeze"
           @toggle-add-node-mode="toggleAddNodeMode"
+          @toggle-add-run-node-mode="toggleAddRunNodeMode"
         />
       </div>
 

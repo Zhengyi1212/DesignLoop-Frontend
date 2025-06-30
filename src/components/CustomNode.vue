@@ -237,6 +237,7 @@ function onOpenCanvas() {
 }
 .delete-btn:hover {
   opacity: 1;
+  color: red;
 }
 
 :deep(.resizer-handle) {

@@ -12,8 +12,6 @@ const props = defineProps({
   sourcePosition: { type: String, required: true },
   targetPosition: { type: String, required: true },
   selected: { type: Boolean, required: false },
-  // MODIFICATION: Added interactionWidth to the props.
-  // Now this component can receive the interaction width from App.vue.
   interactionWidth: { type: Number, required: false, default: 20 },
 });
 
@@ -37,46 +35,41 @@ function onDeleteEdge() {
 </script>
 
 <template>
-  <!-- MODIFICATION: This group now contains two paths. -->
-  
-  <!-- Path 1: The visible edge. -->
-  <!-- This is the line you see on the screen. -->
-  <path 
-    :style="{ strokeWidth: selected ? 3 : 2, stroke: selected ? '#6366F1' : '#b1b1b7' }" 
-    class="vue-flow__edge-path" 
-    :d="pathData[0]" 
-    :marker-end="markerUrl" 
-  />
-  
-  <!-- Path 2: The invisible interaction edge. -->
-  <!-- This path is transparent but has a large stroke-width to make it easy to click. -->
-  <!-- Its width is now correctly bound to the `interactionWidth` prop. -->
-  <path
-    :d="pathData[0]"
-    fill="none"
-    stroke-opacity="0"
-    :stroke-width="interactionWidth"
-  />
+  <g>
+    <path 
+      :style="{ strokeWidth: selected ? 3 : 2, stroke: selected ? '#6366F1' : '#b1b1b7' }" 
+      class="vue-flow__edge-path" 
+      :d="pathData[0]" 
+      :marker-end="markerUrl" 
+    />
+    
+    <path
+      :d="pathData[0]"
+      fill="none"
+      stroke-opacity="0"
+      :stroke-width="interactionWidth"
+    />
 
-  <foreignObject 
-    v-if="selected"
-    width="32" 
-    height="32" 
-    :x="pathData[1] - 16" 
-    :y="pathData[2] - 16" 
-    class="edgebutton-foreignobject"
-  >
-    <div class="edge-button-container">
-      <Button 
-        icon="pi pi-times" 
-        rounded 
-        text 
-        severity="danger" 
-        @click="onDeleteEdge" 
-        title="Delete Edge"
-      />
-    </div>
-  </foreignObject>
+    <foreignObject 
+      v-if="selected"
+      width="32" 
+      height="32" 
+      :x="pathData[1] - 16" 
+      :y="pathData[2] - 16" 
+      class="edgebutton-foreignobject"
+    >
+      <div class="edge-button-container">
+        <Button 
+          icon="pi pi-times" 
+          rounded 
+          text 
+          severity="danger" 
+          @click="onDeleteEdge" 
+          title="Delete Edge"
+        />
+      </div>
+    </foreignObject>
+  </g>
 </template>
 
 <style scoped>

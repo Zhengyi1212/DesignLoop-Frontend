@@ -88,7 +88,7 @@ function onGenerate() {
   top: 0;
   left: 0;
   height: 100vh;
-  width: 250px;
+  width: 210px;
   /* STYLE CHANGE: Reverted to the clean, solid background color. */
   background-color: #f8f9fa;
   border-right: 1px solid #dee2e6;

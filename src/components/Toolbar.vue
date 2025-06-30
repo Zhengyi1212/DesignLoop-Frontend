@@ -1,9 +1,13 @@
 <script setup>
 import { ref } from 'vue';
 
-// Define props including the new color prop
-const props = defineProps({
+// Add a new prop to track if we are in "add run node" mode
+defineProps({
   isAddingNode: {
+    type: Boolean,
+    default: false,
+  },
+  isAddingRunNode: {
     type: Boolean,
     default: false,
   },
@@ -11,15 +15,22 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  // New prop to receive the current color for the node
   newNodeColor: {
     type: String,
     default: '#34495e',
+  },
+  newGroupColor: {
+    type: String,
+    default: '#FFC0CB',
+  },
+  isAddGroup: {
+    type: Boolean,
+    default: false,
   }
 });
 
-// Define emits including the new event to update the color
-const emit = defineEmits(['toggle-freeze', 'toggle-add-node-mode', 'update:newNodeColor']);
+// Add a new event for the run node mode
+const emit = defineEmits(['toggle-freeze', 'toggle-add-node-mode', 'toggle-add-run-node-mode', 'update:newNodeColor','toggle-add-group-mode']);
 
 const colorPicker = ref(null);
 
@@ -27,16 +38,23 @@ function handleAddNodeClick() {
   emit('toggle-add-node-mode');
 }
 
+// Function to handle the new "Run Node" button click
+function handleAddRunNodeClick() {
+  emit('toggle-add-run-node-mode');
+}
+
 function handleFreezeClick() {
   emit('toggle-freeze');
 }
 
-// When the user selects a color, emit an event to the parent
-function onColorChange(event) {
-  emit('update:newNodeColor', event.target.value);
+function onColorChange(event) { // or add few colored circle options
+  emit('update:newNodeColor', 'update:newGroupColor', event.target.value);
 }
 
-// A helper function to programmatically click the hidden color input
+function handleGroupClick() {
+  emit('toggle-add-group-mode');
+}
+
 function openColorPicker() {
   colorPicker.value.click();
 }
@@ -45,40 +63,59 @@ function openColorPicker() {
 <template>
   <div class="toolbar-container">
     <div class="tool-section">
-      <!-- "New Node" button now has a dynamic style bound to the selected color -->
-      <button 
-        class="tool-button" 
+      <button
+        class="tool-button"
         :class="{ active: isAddingNode }"
         :style="{ backgroundColor: isAddingNode ? newNodeColor : '', borderColor: isAddingNode ? newNodeColor : '' }"
         @click="handleAddNodeClick"
-        title="Click to enter Add Node mode, then click on the canvas to place."
+        title="Click to add a new customizable node."
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
         <span>New Node</span>
       </button>
 
-      <!-- New Feature: Color Picker Button -->
-      <button 
-        class="tool-button color-picker-btn" 
-        @click="openColorPicker" 
+      <!-- New Button: Run Node -->
+      <button
+        class="tool-button"
+        :class="{ active: isAddingRunNode }"
+        @click="handleAddRunNodeClick"
+        title="Click to add a new executable Run Node"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        <span>Run Node</span>
+      </button>
+
+      <button
+        class="tool-button"
+        :class="{ active: isAddGroup }"
+        :style="{ backgroundColor: isAddGroup ? newGroupColor : '', borderColor: isAddingGroup ? newGroupColor : '' }"
+        @click="handleGroupClick"
+        title="Click to add a new group base."
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="6" ry="6"></rect></svg>
+        <span>New Group</span>
+      </button>
+
+      <button
+        class="tool-button color-picker-btn"
+        @click="openColorPicker"
         title="Select new node color"
       >
         <div class="color-swatch" :style="{ backgroundColor: newNodeColor }"></div>
         <span>Color</span>
-        <!-- The actual color input is hidden and is triggered programmatically -->
-        <input 
-          type="color" 
-          ref="colorPicker" 
-          :value="newNodeColor" 
+        <input
+          type="color"
+          ref="colorPicker"
+          :value="newNodeColor"
           @input="onColorChange"
-          class="hidden-color-input" 
+          class="hidden-color-input"
         />
       </button>
     </div>
-    
+
     <div class="tool-section">
-      <button 
-        @click="handleFreezeClick" 
+      <button
+        @click="handleFreezeClick"
         class="tool-button"
         :class="{ active: isFrozen }"
         title="Toggle node movement"
@@ -95,7 +132,7 @@ function openColorPicker() {
 .toolbar-container {
   display: flex;
   align-items: center;
-  justify-content: space-between; /* Adjusted for better spacing */
+  justify-content: space-between;
   padding: 0 25px;
   gap: 20px;
   height: 70px;
@@ -134,6 +171,11 @@ function openColorPicker() {
 }
 .tool-button.active svg {
     stroke: white;
+}
+/* Style for the active Run Node button */
+.tool-button:nth-child(2).active {
+    background-color: #f39c12;
+    border-color: #f39c12;
 }
 .color-picker-btn {
   position: relative;

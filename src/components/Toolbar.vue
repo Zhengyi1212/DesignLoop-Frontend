@@ -47,8 +47,8 @@ function handleFreezeClick() {
   emit('toggle-freeze');
 }
 
-function onColorChange(event) { // or add few colored circle options
-  emit('update:newNodeColor', 'update:newGroupColor', event.target.value);
+function onColorChange(event) { // 'update:newGroupColor'
+  emit('update:newNodeColor', event.target.value);
 }
 
 function handleGroupClick() {

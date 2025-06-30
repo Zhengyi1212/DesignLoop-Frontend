@@ -1,50 +1,88 @@
 <script setup>
-// 从 useDnD composable 中导入拖拽起始函数
-// Import the drag start function from the useDnD composable
-import useDragAndDrop from '../composables/useDnD';
+import { ref } from 'vue';
 
-const { onDragStart } = useDragAndDrop();
-
-// 定义 props 和 emits
-// Define props and emits
+// Define props including the new color prop
 const props = defineProps({
+  isAddingNode: {
+    type: Boolean,
+    default: false,
+  },
   isFrozen: {
     type: Boolean,
     default: false,
   },
+  // New prop to receive the current color for the node
+  newNodeColor: {
+    type: String,
+    default: '#34495e',
+  }
 });
 
-const emit = defineEmits(['toggle-freeze']);
+// Define emits including the new event to update the color
+const emit = defineEmits(['toggle-freeze', 'toggle-add-node-mode', 'update:newNodeColor']);
+
+const colorPicker = ref(null);
+
+function handleAddNodeClick() {
+  emit('toggle-add-node-mode');
+}
+
+function handleFreezeClick() {
+  emit('toggle-freeze');
+}
+
+// When the user selects a color, emit an event to the parent
+function onColorChange(event) {
+  emit('update:newNodeColor', event.target.value);
+}
+
+// A helper function to programmatically click the hidden color input
+function openColorPicker() {
+  colorPicker.value.click();
+}
 </script>
 
 <template>
-  <div class="toolbar">
+  <div class="toolbar-container">
     <div class="tool-section">
-      <span class="tool-label">Tool Kit</span>
-      <!-- 
-        这个 div 是可拖拽的。
-        当拖拽开始时，我们调用 onDragStart，并传入事件对象和节点类型 'custom'。
-        This div is draggable.
-        When dragging starts, we call onDragStart, passing the event object and the node type 'custom'.
-      -->
-      <div 
-        class="tool-button node-drag-handle" 
-        :draggable="true" 
-        @dragstart="onDragStart($event, 'custom')"
+      <!-- "New Node" button now has a dynamic style bound to the selected color -->
+      <button 
+        class="tool-button" 
+        :class="{ active: isAddingNode }"
+        :style="{ backgroundColor: isAddingNode ? newNodeColor : '', borderColor: isAddingNode ? newNodeColor : '' }"
+        @click="handleAddNodeClick"
+        title="Click to enter Add Node mode, then click on the canvas to place."
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
         <span>New Node</span>
-      </div>
-    </div>
-    <div class="tool-section">
-       <span class="tool-label">Controls</span>
+      </button>
+
+      <!-- New Feature: Color Picker Button -->
       <button 
-        @click="emit('toggle-freeze')" 
+        class="tool-button color-picker-btn" 
+        @click="openColorPicker" 
+        title="Select new node color"
+      >
+        <div class="color-swatch" :style="{ backgroundColor: newNodeColor }"></div>
+        <span>Color</span>
+        <!-- The actual color input is hidden and is triggered programmatically -->
+        <input 
+          type="color" 
+          ref="colorPicker" 
+          :value="newNodeColor" 
+          @input="onColorChange"
+          class="hidden-color-input" 
+        />
+      </button>
+    </div>
+    
+    <div class="tool-section">
+      <button 
+        @click="handleFreezeClick" 
         class="tool-button"
         :class="{ active: isFrozen }"
+        title="Toggle node movement"
       >
-        <!-- 使用了 Feather Icons 的 SVG 图标 -->
-        <!-- Using SVG icons from Feather Icons -->
         <svg v-if="isFrozen" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
         <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
         <span>{{ isFrozen ? ' Unfreeze' : 'Freeze' }}</span>
@@ -54,31 +92,22 @@ const emit = defineEmits(['toggle-freeze']);
 </template>
 
 <style scoped>
-.toolbar {
-  position: fixed;
-  bottom: 0;
-  left: 250px; /* InstructionPanel 的宽度 */
-  right: 0;
-  height: 70px;
-  /* 旧的灰色背景和边框已被替换 */
-  /* The old grey background and border have been replaced */
-  background-color: #ffffff; /* 修改为白色背景 */
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05); /* 添加了顶部阴影以增加层次感 */
+.toolbar-container {
   display: flex;
   align-items: center;
+  justify-content: space-between; /* Adjusted for better spacing */
   padding: 0 25px;
-  z-index: 10;
-  gap: 30px;
+  gap: 20px;
+  height: 70px;
+  background-color: #ffffff;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  border-top: 1px solid #dee2e6;
+  box-sizing: border-box;
 }
 .tool-section {
     display: flex;
     align-items: center;
     gap: 15px;
-}
-.tool-label {
-    font-size: 12px;
-    color: #6c757d;
-    font-weight: 500;
 }
 .tool-button {
   display: flex;
@@ -106,10 +135,22 @@ const emit = defineEmits(['toggle-freeze']);
 .tool-button.active svg {
     stroke: white;
 }
-.node-drag-handle {
-  cursor: grab;
+.color-picker-btn {
+  position: relative;
 }
-.node-drag-handle:active {
-  cursor: grabbing;
+.color-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+.hidden-color-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 </style>

@@ -1,259 +1,366 @@
 <script setup>
-import { ref } from 'vue';
-import { VueFlow, useVueFlow } from '@vue-flow/core';
+import { ref, onBeforeUnmount } from 'vue';
+import { VueFlow, useVueFlow, applyEdgeChanges } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import { MiniMap } from '@vue-flow/minimap';
 
-// Import our components and composables
 import InstructionPanel from './components/InstructionPanel.vue';
 import Toolbar from './components/Toolbar.vue';
 import CustomNode from './components/CustomNode.vue';
-import useDragAndDrop from './composables/useDnD.js';
+import CustomEdge from './components/CustomEdge.vue';
+import SubCanvas from './components/SubCanvas.vue';
 
-// ---- State Management ----
+let nodeIdCounter = 0;
 
-// This single `useVueFlow` instance controls our one and only canvas.
-const { onConnect, addEdges, removeNodes, getNode } = useVueFlow();
-const { onDragOver, onDrop: originalOnDrop } = useDragAndDrop();
+const { addNodes, addEdges, removeEdges, findNode, removeNodes, project, onPaneMouseMove, getNodes } = useVueFlow();
 
-// These refs hold the data for the *currently visible* canvas.
-// Their content will be swapped in and out.
 const nodes = ref([]);
 const edges = ref([]);
-
-// This will hold the snapshot of the main canvas when we enter a sub-canvas.
-const mainCanvasCache = ref(null);
-
-// These refs track if we are in sub-canvas mode and which node we're editing.
-const activeSubCanvasNodeId = ref(null);
-const activeSubCanvasNodeName = ref('');
-
-// --- Sub-Canvas Logic (State-Swapping Method) ---
-
-/**
- * Opens a sub-canvas by swapping the VueFlow state.
- * @param {string} nodeId - The ID of the node to open.
- */
-function handleOpenSubCanvas(nodeId) {
-    const parentNode = nodes.value.find(n => n.id === nodeId);
-    if (!parentNode) return;
-
-    console.log(`Entering sub-canvas for node: ${nodeId}`);
-
-    // 1. Create a deep-copy snapshot of the main canvas.
-    mainCanvasCache.value = {
-        nodes: JSON.parse(JSON.stringify(nodes.value)),
-        edges: JSON.parse(JSON.stringify(edges.value)),
-    };
-
-    // 2. Set the active state for the UI overlay.
-    activeSubCanvasNodeId.value = nodeId;
-    activeSubCanvasNodeName.value = parentNode.data.title || 'Sub-Canvas';
-
-    // 3. Ensure the sub-graph data structure exists on the parent node.
-    if (!parentNode.data.subGraph) {
-        parentNode.data.subGraph = { nodes: [], edges: [] };
-    }
-    
-    // 4. Load the sub-graph data into the main VueFlow component.
-    // We get this data from the *cached* parent node to work with a stable copy.
-    const cachedParentNode = mainCanvasCache.value.nodes.find(n => n.id === nodeId);
-    nodes.value = cachedParentNode.data.subGraph.nodes;
-    edges.value = cachedParentNode.data.subGraph.edges;
-}
-
-/**
- * Closes the sub-canvas view, saving its state and restoring the main canvas.
- */
-function handleCloseSubCanvas() {
-    if (!activeSubCanvasNodeId.value || !mainCanvasCache.value) return;
-
-    console.log(`Closing sub-canvas for node: ${activeSubCanvasNodeId.value}`);
-
-    // 1. Find the parent node within the cached main canvas.
-    const parentNode = mainCanvasCache.value.nodes.find(n => n.id === activeSubCanvasNodeId.value);
-    
-    if (parentNode) {
-      // 2. Save the current canvas state (the sub-graph) back into the parent node's data.
-      parentNode.data.subGraph = {
-          nodes: JSON.parse(JSON.stringify(nodes.value)),
-          edges: JSON.parse(JSON.stringify(edges.value)),
-      };
-    }
-
-    // 3. Restore the main canvas from the snapshot.
-    nodes.value = mainCanvasCache.value.nodes;
-    edges.value = mainCanvasCache.value.edges;
-    
-    // 4. Reset the state to exit sub-canvas mode.
-    activeSubCanvasNodeId.value = null;
-    activeSubCanvasNodeName.value = '';
-    mainCanvasCache.value = null;
-}
-
-// --- Event Handlers that are Context-Aware ---
-
-/**
- * Handles dropping a new node. The logic differs depending on
- * whether we are on the main canvas or in a sub-canvas.
- */
-function onDrop(event) {
-    // When we are on the main canvas...
-    if (!activeSubCanvasNodeId.value) {
-        // ...we create a node and initialize its `subGraph` property.
-        originalOnDrop(event, (newNode) => {
-            newNode.data.subGraph = { nodes: [], edges: [] };
-        });
-    } else {
-        // When in a sub-canvas, we just create a standard node.
-        originalOnDrop(event);
-    }
-}
-
-/**
- * Deletes a node from whichever canvas (main or sub) is currently active.
- */
-function onNodeDelete(nodeId) {
-  removeNodes([nodeId]);
-  // Note: If you delete a parent node on the main canvas,
-  // its sub-graph data is automatically deleted with it, which is correct.
-}
-
-/**
- * Toggles the freeze state on whichever canvas is currently active.
- */
-function toggleFreeze() {
-  const isCurrentlyFrozen = nodes.value.every(n => n.draggable === false);
-  nodes.value = nodes.value.map(node => ({
-      ...node,
-      draggable: isCurrentlyFrozen,
-      selectable: isCurrentlyFrozen,
-  }));
-}
-
-// ---- Standard Setup ----
-onConnect((params) => addEdges(params));
-const isLoading = ref(false);
+const isFrozen = ref(false);
+const activeSubCanvasData = ref(null);
 const instructionPanels = ref([
-  { title: 'User', content: '' },
-  { title: 'Design Background', content: '' },
-  { title: 'Design Goal', content: '' },
-  { title: 'Pipeline', content: '' },
+  { title: 'User', content: '' }, { title: 'Design Background', content: '' },
+  { title: 'Design Goal', content: '' }, { title: 'Pipeline', content: '' },
 ]);
-// (other functions like handleFetchObjective, handlePanelUpdate remain the same)
+const isGenerating = ref(false);
+const isFetchingPipeline = ref(false);
+const isAddingNode = ref(false);
+
+const newNodeColor = ref('#34495e');
+
+const vueFlowRef = ref(null);
+
+// --- New Feature: Function to handle data updates from nodes ---
+function handleNodeUpdate(event) {
+  const node = findNode(event.id);
+  if (node) {
+    node.data.title = event.data.title;
+    node.data.content = event.data.content;
+  }
+}
+
+function placeNodeOnClick(event) {
+  if (!isAddingNode.value || event.target.closest('.vue-flow__controls')) {
+    return;
+  }
+
+  const ghostNode = findNode('ghost-node');
+  if (!ghostNode) return;
+
+  const newNode = {
+    id: `node-${nodeIdCounter++}`,
+    type: 'custom',
+    position: { ...ghostNode.position },
+    data: {
+      title: '',
+      content: '', // Updated placeholder text
+      color: newNodeColor.value,
+      connections: { in: [], out: [] },
+      subGraph: { nodes: [], edges: [] },
+    },
+  };
+  addNodes([newNode]);
+
+  toggleAddNodeMode();
+}
+
+function toggleAddNodeMode() {
+  isAddingNode.value = !isAddingNode.value;
+
+  const flowElement = vueFlowRef.value?.$el;
+  if (!flowElement) return;
+
+  if (isAddingNode.value) {
+    flowElement.addEventListener('click', placeNodeOnClick, true);
+  } else {
+    flowElement.removeEventListener('click', placeNodeOnClick, true);
+    removeNodes(['ghost-node']);
+  }
+}
+
+onPaneMouseMove((event) => {
+  if (!isAddingNode.value) return;
+  const position = project({ x: event.clientX, y: event.clientY });
+  const ghostNode = findNode('ghost-node');
+  if (ghostNode) {
+    ghostNode.position = position;
+    ghostNode.data.color = newNodeColor.value;
+  } else {
+    addNodes([{
+      id: 'ghost-node',
+      type: 'custom',
+      position,
+      data: {
+        title: 'New Node',
+        content: 'Click to place',
+        color: newNodeColor.value
+      },
+      class: 'ghost-node',
+    }]);
+  }
+});
+
+onBeforeUnmount(() => {
+  const flowElement = vueFlowRef.value?.$el;
+  if (flowElement) {
+    flowElement.removeEventListener('click', placeNodeOnClick, true);
+  }
+});
+
+function isValidConnection(connection) { return connection.source !== connection.target; }
+
+function onConnect(connection) {
+  const sourceNode = findNode(connection.source);
+  const targetNode = findNode(connection.target);
+  if (!sourceNode || !targetNode) return;
+  const newEdgeId = `edge--${connection.source}(${connection.sourceHandle})--${connection.target}(${connection.targetHandle})--${Date.now()}`;
+  const newEdge = { ...connection, id: newEdgeId, type: 'custom', interactionWidth: 30, selectable: true };
+  if (!sourceNode.data.connections.out) sourceNode.data.connections.out = [];
+  sourceNode.data.connections.out.push({ edgeId: newEdge.id, targetId: connection.target, sourceHandle: connection.sourceHandle });
+  if (!targetNode.data.connections.in) targetNode.data.connections.in = [];
+  targetNode.data.connections.in.push({ edgeId: newEdge.id, sourceId: connection.source, targetHandle: connection.targetHandle });
+  addEdges([newEdge]);
+}
+
+function removeConnectionData(edge) {
+  if (!edge) return;
+  const sourceNode = findNode(edge.source);
+  if (sourceNode?.data.connections?.out) {
+    const outIndex = sourceNode.data.connections.out.findIndex(c => c.edgeId === edge.id);
+    if (outIndex !== -1) sourceNode.data.connections.out.splice(outIndex, 1);
+  }
+  const targetNode = findNode(edge.target);
+  if (targetNode?.data.connections?.in) {
+    const inIndex = targetNode.data.connections.in.findIndex(c => c.edgeId === edge.id);
+    if (inIndex !== -1) targetNode.data.connections.in.splice(inIndex, 1);
+  }
+}
+
+function onEdgeDelete(edgeId) {
+  const edgeToRemove = edges.value.find(edge => edge.id === edgeId);
+  removeConnectionData(edgeToRemove);
+  removeEdges([edgeId]);
+}
+
+function onEdgesChange(changes) {
+  const removedChanges = changes.filter(change => change.type === 'remove');
+  removedChanges.forEach(removedChange => {
+    const edgeToRemove = edges.value.find(edge => edge.id === removedChange.id);
+    removeConnectionData(edgeToRemove);
+  });
+  edges.value = applyEdgeChanges(changes, edges.value);
+}
+
+function onNodeDelete(nodeIdToDelete) {
+    const edgesToRemove = edges.value.filter(edge => edge.source === nodeIdToDelete || edge.target === nodeIdToDelete);
+    edgesToRemove.forEach(edge => { removeConnectionData(edge); });
+    removeEdges(edgesToRemove.map(edge => edge.id));
+    removeNodes([nodeIdToDelete]);
+}
+
+async function handleFetchPipeline() {
+  isFetchingPipeline.value = true;
+  try {
+    const url = "http://127.0.0.1:7001/pipeline";
+    const payload = {
+      user_id: instructionPanels.value[0].content,
+      design_background: instructionPanels.value[1].content,
+      design_goal: instructionPanels.value[2].content,
+    };
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
+    }
+    const data = await response.json();
+    instructionPanels.value[3].content = data.pipeline;
+  } catch (error) {
+    console.error("Error during generation request:", error);
+  } finally {
+    isFetchingPipeline.value = false;
+  }
+}
+
+function node_chain_autogene(nodeData) {
+  if (!Array.isArray(nodeData) || nodeData.length === 0) return;
+  const newNodes = []; const newEdges = [];
+  const startX = 100; const startY = 200; const gapX = 250;
+  nodeData.forEach((data, index) => {
+    const newNode = {
+      id: `chain-node-${nodeIdCounter++}`, type: 'custom',
+      position: { x: startX + index * gapX, y: startY },
+      data: {
+        title: data.pipeline_title || 'Untitled Node', content: data.pipeline_content || '',
+        color: newNodeColor.value,
+        connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] },
+      },
+    };
+    newNodes.push(newNode);
+  });
+  for (let i = 1; i < newNodes.length; i++) {
+    const sourceNode = newNodes[i - 1]; const targetNode = newNodes[i];
+    const newEdge = {
+      id: `chain-edge-${sourceNode.id}-to-${targetNode.id}`, source: sourceNode.id, target: targetNode.id,
+      sourceHandle: 'right', targetHandle: 'left', type: 'custom', selectable: true, interactionWidth: 30,
+    };
+    newEdges.push(newEdge);
+    sourceNode.data.connections.out.push({ edgeId: newEdge.id, targetId: targetNode.id, sourceHandle: 'right' });
+    targetNode.data.connections.in.push({ edgeId: newEdge.id, sourceId: sourceNode.id, targetHandle: 'left' });
+  }
+  addNodes(newNodes); addEdges(newEdges);
+}
+
+async function handleGeneration() {
+  isGenerating.value = true;
+  try {
+    const url = "http://127.0.0.1:7001/generate-node-chain";
+    const payload = {
+      pipeline: instructionPanels.value[3].content,
+      design_background: instructionPanels.value[1].content,
+      design_goal:instructionPanels.value[2].content
+    };
+    const response = await fetch(url, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
+    }
+    const data = await response.json();
+    if (data && data.nodes) { node_chain_autogene(data.nodes); }
+  } catch (error) {
+    console.error("Error during node chain request:", error);
+  } finally {
+    isGenerating.value = false;
+  }
+}
+
+function handleOpenSubCanvas(nodeId) {
+    const parentNode = findNode(nodeId);
+    if (!parentNode) return;
+    if (!parentNode.data.subGraph) { parentNode.data.subGraph = { nodes: [], edges: [] }; }
+    activeSubCanvasData.value = { id: parentNode.id, name: parentNode.data.title || 'Sub-Canvas', initialNodes: JSON.parse(JSON.stringify(parentNode.data.subGraph.nodes)), initialEdges: JSON.parse(JSON.stringify(parentNode.data.subGraph.edges)) };
+}
+
+function handleCloseSubCanvas() { activeSubCanvasData.value = null; }
+
+function handleSubCanvasUpdate(event) {
+    const parentNode = findNode(event.nodeId);
+    if (parentNode) { parentNode.data.subGraph = { nodes: JSON.parse(JSON.stringify(event.nodes)), edges: JSON.parse(JSON.stringify(event.edges)), }; }
+}
+
+function toggleFreeze() {
+  isFrozen.value = !isFrozen.value;
+  const isDraggable = !isFrozen.value;
+
+  for (const node of getNodes.value) {
+    if (node.id !== 'ghost-node') {
+      node.draggable = isDraggable;
+      node.selectable = isDraggable;
+    }
+  }
+}
 </script>
 
 <template>
   <div class="app-container">
-    <InstructionPanel 
-      :panels="instructionPanels" 
-      :is-loading="isLoading"
+    <InstructionPanel
+      :panels="instructionPanels"
+      :is-generating="isGenerating"
+      :is-fetching-pipeline="isFetchingPipeline"
+      @update-panel-content="(event) => instructionPanels[event.index].content = event.content"
+      @generate="handleGeneration"
+      @fetch-pipeline="handleFetchPipeline"
     />
 
     <main class="main-content">
       <VueFlow
         v-model:nodes="nodes"
         v-model:edges="edges"
+        @edges-change="onEdgesChange"
+        @connect="onConnect"
+        :is-valid-connection="isValidConnection"
         class="flow-canvas"
-        @dragover="onDragOver"
-        @drop="onDrop"
         :fit-view-on-init="true"
+        :delete-key-code="'Backspace'"
+        ref="vueFlowRef"
       >
+        <defs>
+          <marker id="custom-arrow" viewBox="-10 -10 20 20" refX="0" refY="0" markerWidth="16" markerHeight="16" orient="auto-start-reverse">
+            <path d="M -8 -6 L 8 0 L -8 6 Z" fill="#b1b1b7" />
+          </marker>
+          <marker id="custom-arrow-selected" viewBox="-10 -10 20 20" refX="0" refY="0" markerWidth="16" markerHeight="16" orient="auto-start-reverse">
+            <path d="M -8 -6 L 8 0 L -8 6 Z" fill="#6366F1" />
+          </marker>
+        </defs>
+
         <template #node-custom="props">
-          <CustomNode 
+          <!-- Listen for the new event here -->
+          <CustomNode
             v-bind="props"
-            @delete="onNodeDelete" 
-            @open-canvas="handleOpenSubCanvas" 
+            @delete="onNodeDelete"
+            @open-canvas="handleOpenSubCanvas"
+            @update-node-data="handleNodeUpdate"
           />
         </template>
-        
-        <Background />
-        <MiniMap />
-        <Controls />
+
+        <template #edge-custom="props">
+          <CustomEdge v-bind="props" @delete-edge="onEdgeDelete" />
+        </template>
+
+        <Background /> <MiniMap /> <Controls />
       </VueFlow>
 
-      <Toolbar @toggle-freeze="toggleFreeze" />
-
-      <div v-if="activeSubCanvasNodeId" class="sub-canvas-ui-overlay">
-        <div class="sub-canvas-controls">
-            <h3>Editing Sub-Canvas for: <span>{{ activeSubCanvasNodeName }}</span></h3>
-            <button @click="handleCloseSubCanvas" class="btn-save-close">Save & Close</button>
-        </div>
+      <div class="main-toolbar-wrapper">
+        <Toolbar
+          :is-frozen="isFrozen"
+          :is-adding-node="isAddingNode"
+          v-model:newNodeColor="newNodeColor"
+          @toggle-freeze="toggleFreeze"
+          @toggle-add-node-mode="toggleAddNodeMode"
+        />
       </div>
+
+      <SubCanvas
+        v-if="activeSubCanvasData"
+        :node-id="activeSubCanvasData.id" :node-name="activeSubCanvasData.name"
+        :initial-nodes="activeSubCanvasData.initialNodes" :initial-edges="activeSubCanvasData.initialEdges"
+        @close="handleCloseSubCanvas" @update:graph="handleSubCanvasUpdate"
+      />
     </main>
   </div>
 </template>
 
 <style>
-/* Global styles remain the same */
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/core@1.45.0/dist/style.css';
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/core@1.45.0/dist/theme-default.css';
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/controls@latest/dist/style.css';
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/minimap@latest/dist/style.css';
+@import '@vue-flow/node-resizer/dist/style.css';
 
-:root {
-  --app-bg: #f3f4f6;
-  --panel-width: 250px;
-}
-body, html {
-  margin: 0; padding: 0; height: 100%;
-  font-family: 'JetBrains Mono', 'Helvetica Neue', Arial, sans-serif;
-  background-color: var(--app-bg);
-}
-.app-container {
-  display: flex; height: 100vh;
-}
-.main-content {
-  flex-grow: 1; position: relative; display: flex; flex-direction: column;
-}
-.flow-canvas {
-  flex-grow: 1; height: 100%; width: 100%;
+:root { --app-bg: #f3f4f6; --panel-width: 250px; }
+body, html { margin: 0; padding: 0; height: 100%; font-family: 'JetBrains Mono', 'Helvetica Neue', Arial, sans-serif; background-color: var(--app-bg); }
+.app-container { display: flex; height: 100vh; }
+.main-content { flex-grow: 1; position: relative; display: flex; flex-direction: column; }
+.flow-canvas { flex-grow: 1; height: 100%; width: 100%; }
+
+.vue-flow__node.ghost-node {
+  opacity: 0.6;
+  border-style: dashed;
+  cursor: grabbing;
+  pointer-events: none;
 }
 
-/* NEW STYLES for the sub-canvas UI overlay */
-.sub-canvas-ui-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    /* A very subtle pointer-events setting to let drop events pass through to the canvas */
-    pointer-events: none; 
-    z-index: 20; /* Above the canvas but below modals */
-    padding: 20px;
-}
-.sub-canvas-controls {
-    pointer-events: all; /* Allow clicking on the control box */
-    display: inline-flex;
-    align-items: center;
-    gap: 20px;
-    background-color: rgba(255, 255, 255, 0.95);
-    padding: 10px 20px;
-    border-radius: 10px;
-    border: 1px solid #ccc;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-.sub-canvas-controls h3 {
-    margin: 0;
-    font-size: 16px;
-    color: #333;
-}
-.sub-canvas-controls h3 span {
-    color: #007bff;
-    font-weight: bold;
-}
-.btn-save-close {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
-    background-color: #28a745;
-    color: white;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-.btn-save-close:hover {
-    background-color: #218838;
+.main-toolbar-wrapper {
+  position: fixed;
+  bottom: 0;
+  left: var(--panel-width);
+  right: 0;
+  z-index: 10;
 }
 </style>

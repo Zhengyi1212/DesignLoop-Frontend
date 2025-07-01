@@ -87,8 +87,6 @@ function findSuccessors(startNodeId, allNodes, allEdges) {
       if (currentNode) {
         const content = currentNode.data.content || '';
         
-        // --- FIX: Only add successors that have meaningful content ---
-        // This prevents sending empty or default text to the backend.
         const placeholderTexts = ['Click to edit...', 'Ready to run...', ''];
         if (content && !placeholderTexts.includes(content.trim())) {
             successors.push({
@@ -105,7 +103,6 @@ function findSuccessors(startNodeId, allNodes, allEdges) {
     }
   }
   
-  // Remove duplicates that might occur in complex graph structures and sort by level
   const uniqueSuccessors = Array.from(new Map(successors.map(s => [s.content, s])).values())
                                 .sort((a, b) => a.level - b.level);
   
@@ -123,7 +120,6 @@ async function handleNodeRun(nodeId) {
     runningNodeId.value = nodeId; // Set the current node as running to show the spinner
     node.data.content = 'Running...'; // Provide immediate feedback
 
-    // Find all successors and their levels
     const successors = findSuccessors(nodeId, getNodes.value, edges.value);
 
     try {
@@ -149,7 +145,6 @@ async function handleNodeRun(nodeId) {
         const data = await response.json();
         console.log('%c[Debug] Received response from backend:', 'color: green;', data);
         
-        // The backend now returns { "output": "..." }
         node.data.content = data.content; 
     } catch (error) {
         console.error("Error during run request:", error);
@@ -178,6 +173,9 @@ function placeNodeOnClick(event) {
     data: {
       title: isRunNode ? 'Run Node' : 'New Node',
       content: isRunNode ? 'Ready to run...' : 'Click to edit...',
+      // MODIFIED: Add instruction and problem fields to the data model for persistence
+      instruction: '',
+      problem: '',
       color: isRunNode ? '#f1c40f' : newNodeColor.value,
       connections: { in: [], out: [] },
       subGraph: { nodes: [], edges: [] },
@@ -396,18 +394,44 @@ async function handleGeneration() {
   }
 }
 
+// MODIFIED: Pass the node's instruction and problem values to the sub-canvas
 function handleOpenSubCanvas(nodeId) {
     const parentNode = findNode(nodeId);
     if (!parentNode) return;
     if (!parentNode.data.subGraph) { parentNode.data.subGraph = { nodes: [], edges: [] }; }
-    activeSubCanvasData.value = { id: parentNode.id, name: parentNode.data.title || 'Sub-Canvas', initialNodes: JSON.parse(JSON.stringify(parentNode.data.subGraph.nodes)), initialEdges: JSON.parse(JSON.stringify(parentNode.data.subGraph.edges)) };
+    
+    activeSubCanvasData.value = {
+        id: parentNode.id,
+        name: parentNode.data.title || 'Sub-Canvas',
+        parentNodeTitle: parentNode.data.title,
+        parentNodeContent: parentNode.data.content,
+        // Pass persisted instruction and problem values
+        parentNodeInstruction: parentNode.data.instruction,
+        parentNodeProblem: parentNode.data.problem,
+        initialNodes: JSON.parse(JSON.stringify(parentNode.data.subGraph.nodes)),
+        initialEdges: JSON.parse(JSON.stringify(parentNode.data.subGraph.edges))
+    };
 }
 
 function handleCloseSubCanvas() { activeSubCanvasData.value = null; }
 
 function handleSubCanvasUpdate(event) {
     const parentNode = findNode(event.nodeId);
-    if (parentNode) { parentNode.data.subGraph = { nodes: JSON.parse(JSON.stringify(event.nodes)), edges: JSON.parse(JSON.stringify(event.edges)), }; }
+    if (parentNode) { 
+        parentNode.data.subGraph = { 
+            nodes: JSON.parse(JSON.stringify(event.nodes)), 
+            edges: JSON.parse(JSON.stringify(event.edges)), 
+        }; 
+    }
+}
+
+// NEW: Handler to save instruction/problem data from sub-canvas back to the parent node
+function handleSubCanvasDataUpdate(event) {
+    const parentNode = findNode(event.nodeId);
+    if (parentNode) {
+        parentNode.data.instruction = event.instruction;
+        parentNode.data.problem = event.problem;
+    }
 }
 
 function toggleFreeze() {
@@ -493,11 +517,20 @@ function toggleFreeze() {
         />
       </div>
 
+      <!-- MODIFIED: Bind new props and event handler for data persistence -->
       <SubCanvas
         v-if="activeSubCanvasData"
-        :node-id="activeSubCanvasData.id" :node-name="activeSubCanvasData.name"
-        :initial-nodes="activeSubCanvasData.initialNodes" :initial-edges="activeSubCanvasData.initialEdges"
-        @close="handleCloseSubCanvas" @update:graph="handleSubCanvasUpdate"
+        :node-id="activeSubCanvasData.id"
+        :node-name="activeSubCanvasData.name"
+        :parent-node-title="activeSubCanvasData.parentNodeTitle"
+        :parent-node-content="activeSubCanvasData.parentNodeContent"
+        :parent-node-instruction="activeSubCanvasData.parentNodeInstruction"
+        :parent-node-problem="activeSubCanvasData.parentNodeProblem"
+        :initial-nodes="activeSubCanvasData.initialNodes"
+        :initial-edges="activeSubCanvasData.initialEdges"
+        @close="handleCloseSubCanvas"
+        @update:graph="handleSubCanvasUpdate"
+        @update:data="handleSubCanvasDataUpdate"
       />
     </main>
   </div>

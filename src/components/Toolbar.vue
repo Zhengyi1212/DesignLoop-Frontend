@@ -102,7 +102,7 @@ function openColorPicker() {
         title="Select new node color"
       >
         <div class="color-swatch" :style="{ backgroundColor: newNodeColor }"></div>
-        <span>Color</span>
+        
         <input
           type="color"
           ref="colorPicker"

@@ -97,12 +97,12 @@ subflow.onPaneMouseMove((event) => {
   };
 
   const position = subflow.project(relativeMousePos);
-  
+
   const adjustedPosition = {
     x: position.x + GHOST_NODE_OFFSET_X,
     y: position.y + GHOST_NODE_OFFSET_Y,
   };
-  
+
   const ghostNode = subflow.findNode('ghost-node');
 
   if (ghostNode) {
@@ -113,8 +113,8 @@ subflow.onPaneMouseMove((event) => {
       id: 'ghost-node',
       type: 'custom',
       position: adjustedPosition,
-      data: { 
-        title: 'New Node', 
+      data: {
+        title: 'New Node',
         content: 'Click to place',
         color: newNodeColor.value
       },
@@ -146,11 +146,11 @@ function toggleFreeze() {
 }
 
 watch([subflow.nodes, subflow.edges], () => {
-    emit('update:graph', {
-        nodeId: props.nodeId,
-        nodes: subflow.getNodes.value,
-        edges: subflow.getEdges.value,
-    });
+  emit('update:graph', {
+    nodeId: props.nodeId,
+    nodes: subflow.getNodes.value,
+    edges: subflow.getEdges.value,
+  });
 }, { deep: true });
 
 
@@ -170,20 +170,20 @@ function handleNodeSave(event) {
 }
 
 function onFieldBlur() {
-    emit('update:data', {
-        nodeId: props.nodeId,
-        instruction: instruction.value,
-        problem: problem.value,
-    });
+  emit('update:data', {
+    nodeId: props.nodeId,
+    instruction: instruction.value,
+    problem: problem.value,
+  });
 }
 
 // NEW: Function to generate a chain of Run Nodes inside the sub-canvas
 function generateNodeChain(nodeContents) {
   if (!Array.isArray(nodeContents) || nodeContents.length === 0) return;
-  const newNodes = []; 
+  const newNodes = [];
   const newEdges = [];
-  const startX = 100; 
-  const startY = 200; 
+  const startX = 100;
+  const startY = 200;
   const gapX = 250;
 
   nodeContents.forEach((content, index) => {
@@ -191,9 +191,9 @@ function generateNodeChain(nodeContents) {
       id: `sub-run-node-${props.nodeId}-${subNodeIdCounter++}`,
       type: 'run', // Use the 'run' type
       position: { x: startX + index * gapX, y: startY },
-      style: { 
-        width: '200px', 
-        height: '150px' 
+      style: {
+        width: '200px',
+        height: '150px'
       },
       data: {
         title: `Generated Step ${index + 1}`,
@@ -204,7 +204,7 @@ function generateNodeChain(nodeContents) {
   });
 
   for (let i = 1; i < newNodes.length; i++) {
-    const sourceNode = newNodes[i - 1]; 
+    const sourceNode = newNodes[i - 1];
     const targetNode = newNodes[i];
     const newEdge = {
       id: `sub-chain-edge-${sourceNode.id}-to-${targetNode.id}`,
@@ -218,100 +218,100 @@ function generateNodeChain(nodeContents) {
     };
     newEdges.push(newEdge);
   }
-  
+
   subflow.addNodes(newNodes);
   subflow.addEdges(newEdges);
 }
 
 // NEW: A simple handler for when a run node *inside* the sub-canvas is clicked
 async function handleSubNodeRun(nodeId) {
-    const node = subflow.findNode(nodeId);
-    if (!node || runningSubNodeId.value) return;
+  const node = subflow.findNode(nodeId);
+  if (!node || runningSubNodeId.value) return;
 
-    runningSubNodeId.value = nodeId;
-    const originalContent = node.data.content;
-    node.data.content = 'Running...';
+  runningSubNodeId.value = nodeId;
+  const originalContent = node.data.content;
+  node.data.content = 'Running...';
 
-    try {
-        const url = "http://127.0.0.1:7001/thinking-chain-node"; // Example backend endpoint
-        const payload = {
-            // Data from the parent node
-            //parent_title: props.parentNodeTitle,
-            //parent_content: props.parentNodeContent,
-            // Data from the sub-canvas text fields
-            instruction: instruction.value,
-            problem: problem.value,
-            chain : chainList,
-            // Data specific to the node being run
-            node_content: originalContent,
-        };
+  try {
+    const url = "http://127.0.0.1:7001/thinking-chain-node"; // Example backend endpoint
+    const payload = {
+      // Data from the parent node
+      //parent_title: props.parentNodeTitle,
+      //parent_content: props.parentNodeContent,
+      // Data from the sub-canvas text fields
+      instruction: instruction.value,
+      problem: problem.value,
+      chain: chainList,
+      // Data specific to the node being run
+      node_content: originalContent,
+    };
 
-        console.log(`%c[Sub-Canvas] Running node ${nodeId} with payload:`, 'color: #3498db; font-weight: bold;', payload);
+    console.log(`%c[Sub-Canvas] Running node ${nodeId} with payload:`, 'color: #3498db; font-weight: bold;', payload);
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: response.statusText }));
-            throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
-        }
-
-        const result = await response.json();
-        // Assuming the backend returns a new content string in a field like 'output'
-        node.data.content = result.output || 'Finished.';
-        console.log(`%c[Sub-Canvas] Node ${nodeId} finished with result:`, 'color: #2ecc71;', result);
-
-    } catch (error) {
-        console.error(`Error running sub-node ${nodeId}:`, error);
-        node.data.content = `Error: ${error.message}`;
-    } finally {
-        runningSubNodeId.value = null;
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: response.statusText }));
+      throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
     }
+
+    const result = await response.json();
+    // Assuming the backend returns a new content string in a field like 'output'
+    node.data.content = result.output || 'Finished.';
+    console.log(`%c[Sub-Canvas] Node ${nodeId} finished with result:`, 'color: #2ecc71;', result);
+
+  } catch (error) {
+    console.error(`Error running sub-node ${nodeId}:`, error);
+    node.data.content = `Error: ${error.message}`;
+  } finally {
+    runningSubNodeId.value = null;
+  }
 }
 
 async function handleSubCanvasRun() {
-    if (isSubCanvasRunning.value) return;
-    isSubCanvasRunning.value = true;
+  if (isSubCanvasRunning.value) return;
+  isSubCanvasRunning.value = true;
 
-    try {
-        const url = "http://127.0.0.1:7001/generate-thinking-chain";
-        const payload = {
-            node_title: props.parentNodeTitle,
-            node_content: props.parentNodeContent,
-            instruction: instruction.value,
-            problem: problem.value,
-            //subgraph: {
-              //  nodes: subflow.getNodes.value,
-                //edges: subflow.getEdges.value,
-           // }
-        };
-         
-        console.log('%c[Sub-Canvas] Running with payload:', 'color: purple; font-weight: bold;', payload);
-        console.log("Payload: ",payload)
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: response.statusText }));
-            throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
-        }
-        const data = await response.json();
-        
-        console.log(data)
-        // MODIFIED: Call the new function with mock data after the "API call"
-        chainList.value = data
-        generateNodeChain(data);
+  try {
+    const url = "http://127.0.0.1:7001/generate-thinking-chain";
+    const payload = {
+      node_title: props.parentNodeTitle,
+      node_content: props.parentNodeContent,
+      instruction: instruction.value,
+      problem: problem.value,
+      //subgraph: {
+      //  nodes: subflow.getNodes.value,
+      //edges: subflow.getEdges.value,
+      // }
+    };
 
-    } catch (error) {
-        console.error("Error during sub-canvas run:", error);
-    } finally {
-        isSubCanvasRunning.value = false;
+    console.log('%c[Sub-Canvas] Running with payload:', 'color: purple; font-weight: bold;', payload);
+    console.log("Payload: ", payload)
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: response.statusText }));
+      throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
     }
+    const data = await response.json();
+
+    console.log(data)
+    // MODIFIED: Call the new function with mock data after the "API call"
+    chainList.value = data
+    generateNodeChain(data);
+
+  } catch (error) {
+    console.error("Error during sub-canvas run:", error);
+  } finally {
+    isSubCanvasRunning.value = false;
+  }
 }
 
 
@@ -321,32 +321,32 @@ const isDragging = ref(false);
 const dragOffset = ref({ x: 0, y: 0 });
 
 function onHeaderMouseDown(event) {
-    if (event.target.closest('button, input, .run-button-wrapper')) return;
-    isDragging.value = true;
-    const rect = subCanvasEl.value.getBoundingClientRect();
-    dragOffset.value = {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-    };
-    window.addEventListener('mousemove', onDragMove);
-    window.addEventListener('mouseup', onDragEnd);
+  if (event.target.closest('button, input, .run-button-wrapper')) return;
+  isDragging.value = true;
+  const rect = subCanvasEl.value.getBoundingClientRect();
+  dragOffset.value = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+  window.addEventListener('mousemove', onDragMove);
+  window.addEventListener('mouseup', onDragEnd);
 }
 
 function onDragMove(event) {
-    if (!isDragging.value) return;
-    subCanvasEl.value.style.left = `${event.clientX - dragOffset.value.x}px`;
-    subCanvasEl.value.style.top = `${event.clientY - dragOffset.value.y}px`;
+  if (!isDragging.value) return;
+  subCanvasEl.value.style.left = `${event.clientX - dragOffset.value.x}px`;
+  subCanvasEl.value.style.top = `${event.clientY - dragOffset.value.y}px`;
 }
 
 function onDragEnd() {
-    isDragging.value = false;
-    window.removeEventListener('mousemove', onDragMove);
-    window.removeEventListener('mouseup', onDragEnd);
+  isDragging.value = false;
+  window.removeEventListener('mousemove', onDragMove);
+  window.removeEventListener('mouseup', onDragEnd);
 }
 
 onUnmounted(() => {
-    window.removeEventListener('mousemove', onDragMove);
-    window.removeEventListener('mouseup', onDragEnd);
+  window.removeEventListener('mousemove', onDragMove);
+  window.removeEventListener('mouseup', onDragEnd);
 });
 </script>
 
@@ -356,185 +356,236 @@ onUnmounted(() => {
       <div class="sub-canvas-header" @mousedown="onHeaderMouseDown">
         <span class="title">✏️ {{ nodeName }}</span>
         <div class="header-actions">
-            <div class="run-button-wrapper">
-                <button 
-                    class="run-btn"
-                    @click="handleSubCanvasRun" 
-                    :disabled="isSubCanvasRunning"
-                    title="Run Sub-Canvas Logic"
-                >
-                    <div v-if="isSubCanvasRunning" class="spinner"></div>
-                    <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
-                    </svg>
-                    <span>Run</span>
-                </button>
-            </div>
-            <button @click="emit('close')" class="close-btn" title="Close Canvas">×</button>
+
+          <button @click="emit('close')" class="close-btn" title="Close Canvas">×</button>
         </div>
       </div>
-
+      <div class="upper-area">
       <div class="sub-canvas-fields">
         <div class="field">
-            <label for="instruction">Instruction</label>
-            <textarea id="instruction" v-model="instruction" @blur="onFieldBlur" :placeholder="'Enter instructions here...'" rows="3"></textarea>
+          <label for="instruction">Instruction</label>
+          <textarea id="instruction" v-model="instruction" @blur="onFieldBlur"
+            :placeholder="'Enter instructions here...'" rows="3"></textarea>
         </div>
         <div class="field">
-            <label for="problem">Problem</label>
-            <textarea id="problem" v-model="problem" @blur="onFieldBlur" :placeholder="'Describe the problem here...'" rows="3"></textarea>
+          <label for="problem">Goal</label>
+          <textarea id="problem" v-model="problem" @blur="onFieldBlur" :placeholder="'Describe the goal here...'"
+            rows="3"></textarea>
         </div>
       </div>
-
+      <div class="run-button-wrapper">
+        <button class="run-btn" @click="handleSubCanvasRun" :disabled="isSubCanvasRunning" title="Run Sub-Canvas Logic">
+          <div v-if="isSubCanvasRunning" class="spinner"></div>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+            <path
+              d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" />
+          </svg>
+          <span>Run</span>
+        </button>
+      </div>
+      </div>
       <div class="sub-canvas-content">
-        <VueFlow
-            :id="props.nodeId"
-            v-model:nodes="nodes"
-            v-model:edges="edges"
-            :fit-view-on-init="true"
-            class="sub-flow"
-            ref="vueFlowRef"
-        >
-            <template #node-custom="customProps">
-              <CustomNode v-bind="customProps" @delete="subflow.removeNodes([$event])" @open-canvas="handleNodeDoubleClick" />
-            </template>
-            <!-- NEW: Template for rendering Run Nodes inside the sub-canvas -->
-            <template #node-run="runProps">
-              <RunNode v-bind="runProps" @delete="subflow.removeNodes([$event])" @run-node="handleSubNodeRun" :is-running="runningSubNodeId === runProps.id" />
-            </template>
-            <Background />
-            <Controls />
+        <VueFlow :id="props.nodeId" v-model:nodes="nodes" v-model:edges="edges" :fit-view-on-init="true"
+          class="sub-flow" ref="vueFlowRef">
+          <template #node-custom="customProps">
+            <CustomNode v-bind="customProps" @delete="subflow.removeNodes([$event])"
+              @open-canvas="handleNodeDoubleClick" />
+          </template>
+          <!-- NEW: Template for rendering Run Nodes inside the sub-canvas -->
+          <template #node-run="runProps">
+            <RunNode v-bind="runProps" @delete="subflow.removeNodes([$event])" @run-node="handleSubNodeRun"
+              :is-running="runningSubNodeId === runProps.id" />
+          </template>
+          <Background />
+          <Controls />
         </VueFlow>
       </div>
 
       <div class="sub-canvas-toolbar-wrapper">
-        <Toolbar
-            :is-frozen="isFrozen"
-            :is-adding-node="isAddingNode"
-            v-model:newNodeColor="newNodeColor"
-            @toggle-freeze="toggleFreeze"
-            @toggle-add-node-mode="toggleAddNodeMode"
-        />
+        <Toolbar :is-frozen="isFrozen" :is-adding-node="isAddingNode" v-model:newNodeColor="newNodeColor"
+          @toggle-freeze="toggleFreeze" @toggle-add-node-mode="toggleAddNodeMode" />
       </div>
     </div>
 
-    <EditModal
-      :show="isEditModalVisible"
-      :node-data="editingNode"
-      @close="isEditModalVisible = false"
-      @save="handleNodeSave"
-    />
+    <EditModal :show="isEditModalVisible" :node-data="editingNode" @close="isEditModalVisible = false"
+      @save="handleNodeSave" />
   </div>
 </template>
 
 <style scoped>
 .sub-canvas-overlay {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background-color: rgba(44, 62, 80, 0.4); z-index: 100;
-    display: flex; justify-content: center; align-items: center;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(44, 62, 80, 0.4);
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
+
 .sub-canvas-window {
-    width: 70vw; height: 80vh; background-color: white;
-    border-radius: 12px; box-shadow: 0 15px 40px rgba(0,0,0,0.25);
-    display: flex; flex-direction: column; position: absolute;
-    border: 1px solid #dee2e6;
+  width: 70vw;
+  height: 80vh;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  border: 1px solid #dee2e6;
 }
+
 .sub-canvas-header {
-    padding: 10px 20px; background-color: #f8f9fa;
-    border-top-left-radius: 11px; border-top-right-radius: 11px;
-    border-bottom: 1px solid #dee2e6; display: flex;
-    justify-content: space-between; align-items: center;
-    cursor: move; user-select: none;
+  padding: 10px 20px;
+  background-color: #f8f9fa;
+  border-top-left-radius: 11px;
+  border-top-right-radius: 11px;
+  border-bottom: 1px solid #dee2e6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: move;
+  user-select: none;
 }
-.sub-canvas-header .title { font-weight: 600; color: #343a40; }
+
+.sub-canvas-header .title {
+  font-weight: 600;
+  color: #343a40;
+}
+
 .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 15px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
+
 .close-btn {
-    background: none; border: none; font-size: 26px; font-weight: 600;
-    cursor: pointer; color: #adb5bd; transition: color 0.2s ease, transform 0.2s ease;
-    padding: 0 5px; line-height: 1;
+  background: none;
+  border: none;
+  font-size: 26px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #adb5bd;
+  transition: color 0.2s ease, transform 0.2s ease;
+  padding: 0 5px;
+  line-height: 1;
 }
-.close-btn:hover { color: #e74c3c; transform: scale(1.1); }
 
+.close-btn:hover {
+  color: #e74c3c;
+  transform: scale(1.1);
+}
+.upper-area {
+  display: flex;
+  flex-direction: column;
+
+}
 .sub-canvas-fields {
-    padding: 15px 20px;
-    background-color: #fdfdfd;
-    border-bottom: 1px solid #e9ecef;
-    display: flex;
-    flex-direction: row;
-    gap: 20px;
-}
-.field {
-    width: calc(50% - 10px); 
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
-.field label {
-    font-weight: 500;
-    font-size: 13px;
-    color: #495057;
-}
-.field textarea {
-    width: 100%;
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: 1px solid #ced4da;
-    font-family: 'JetBrains Mono', sans-serif;
-    font-size: 14px;
-    resize: vertical;
-    box-sizing: border-box;
-}
-.field textarea:focus {
-    outline: none;
-    border-color: #80bdff;
-    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+  padding: 15px 20px;
+  background-color: #fdfdfd;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
 }
 
-.run-btn {
+.field {
+  width: calc(50% - 10px);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field label {
+  font-weight: 1000;
+  font-size: 13px;
+  color: #495057;
+  font: bold
+}
+
+.field textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #ced4da;
+  font-family: 'JetBrains Mono', sans-serif;
+  font-size: 14px;
+  height: 30px;
+  box-sizing: border-box;
+}
+
+.field textarea:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, .25);
+}
+
+.run-button-wrapper{
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 6px 14px;
-    border: 1px solid #28a745;
-    background-color: #28a745;
-    color: white;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 14px;
-    min-width: 80px;
-    height: 32px;
+
+
+  justify-content: flex-end;
 }
+.run-btn {
+  display: flex;
+  align-items: center;
+  justify-content: right;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 1px solid #28a745;
+  background-color: #28a745;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  min-width: 80px;
+  height: 32px;
+}
+
 .run-btn:hover:not(:disabled) {
-    background-color: #218838;
-    border-color: #1e7e34;
+  background-color: #218838;
+  border-color: #1e7e34;
 }
+
 .run-btn:disabled {
-    background-color: #6c757d;
-    border-color: #6c757d;
-    cursor: not-allowed;
+  background-color: #6c757d;
+  border-color: #6c757d;
+  cursor: not-allowed;
 }
 
 .spinner {
-  border: 3px solid rgba(255,255,255,0.3);
+  border: 3px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
   border-top-color: #fff;
   width: 16px;
   height: 16px;
   animation: spin 1s linear infinite;
 }
+
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
-.sub-canvas-content { flex-grow: 1; position: relative; }
-.sub-flow { border-bottom-left-radius: 11px; border-bottom-right-radius: 11px; }
+.sub-canvas-content {
+  flex-grow: 1;
+  position: relative;
+}
+
+.sub-flow {
+  border-bottom-left-radius: 11px;
+  border-bottom-right-radius: 11px;
+}
 
 .sub-canvas-toolbar-wrapper {
   position: absolute;

@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, nextTick } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
@@ -11,7 +11,44 @@ const props = defineProps({
   isRunning: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['delete', 'open-canvas', 'run-node']);
+// NEW: Add 'update-node-data' to the list of emits
+const emit = defineEmits(['delete', 'open-canvas', 'run-node', 'update-node-data']);
+
+// --- NEW: In-place Editing Logic ---
+
+const isEditingTitle = ref(false);
+const isEditingContent = ref(false);
+const titleInput = ref(null);
+const contentInput = ref(null);
+
+function startEditTitle() {
+  if (props.id === 'ghost-node') return;
+  isEditingTitle.value = true;
+  nextTick(() => {
+    titleInput.value?.focus();
+    titleInput.value?.select();
+  });
+}
+
+function startEditContent() {
+  if (props.id === 'ghost-node') return;
+  isEditingContent.value = true;
+  nextTick(() => {
+    contentInput.value?.focus();
+  });
+}
+
+function saveChanges() {
+  emit('update-node-data', {
+    id: props.id,
+    data: {
+      title: props.data.title,
+      content: props.data.content,
+    }
+  });
+  isEditingTitle.value = false;
+  isEditingContent.value = false;
+}
 
 // --- Component Specific Logic (Unchanged) ---
 
@@ -31,19 +68,20 @@ const nodeSelectionStyle = computed(() => {
   return {};
 });
 
-// --- Event Handlers (Unchanged) ---
+// --- Event Handlers (Updated) ---
 
 function onDelete() {
   emit('delete', props.id);
 }
 
 function onOpenCanvas() {
+  // MODIFIED: Prevent opening canvas while editing
+  if (isEditingTitle.value || isEditingContent.value) return;
   if (props.id === 'ghost-node') return;
   emit('open-canvas', props.id);
 }
 
 function onRun() {
-  // Prevent running again if already in progress
   if (props.isRunning) return;
   emit('run-node', props.id);
 }
@@ -52,6 +90,7 @@ function onRun() {
 <template>
   <div
     class="run-node"
+    :class="{ 'is-editing': isEditingTitle || isEditingContent }"
     :style="[
       id === 'ghost-node' ? { pointerEvents: 'none' } : {},
       nodeSelectionStyle
@@ -75,24 +114,46 @@ function onRun() {
     </template>
 
     <div class="node-header" :style="nodeHeaderStyle">
-      <strong>{{ data.title || 'Run Node' }}</strong>
-      <button class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
+      <strong
+        v-if="!isEditingTitle"
+        @click.stop="startEditTitle"
+        title="Click to edit title"
+      >
+        {{ data.title || 'Run Node' }}
+      </strong>
+      <input
+        v-else
+        ref="titleInput"
+        v-model="data.title"
+        @blur="saveChanges"
+        @keydown.enter="saveChanges"
+        @click.stop
+        class="title-input"
+        type="text"
+      />
+      <button v-if="!isEditingTitle" class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
     </div>
 
-    <div class="node-content">
-      <p class="content-display">{{ data.content || 'Click the run button...' }}</p>
+    <div class="node-content" @click.stop="startEditContent" title="Click to edit content">
+      <p v-if="!isEditingContent" class="content-display">{{ data.content || 'Click the run button...' }}</p>
+      <textarea
+        v-else
+        ref="contentInput"
+        v-model="data.content"
+        @blur="saveChanges"
+        @click.stop
+        class="content-input"
+      ></textarea>
     </div>
 
     <div class="node-footer">
-        <!-- Show the Run button only when not running -->
-        <button v-if="!isRunning" class="run-btn" @click.stop="onRun" title="Run this node">
+        <button v-if="!isRunning && !isEditingContent" class="run-btn" @click.stop="onRun" title="Run this node">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                 <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
             </svg>
             <span>Run</span>
         </button>
-        <!-- Show a spinner animation while running -->
-        <div v-else class="spinner-container">
+        <div v-else-if="isRunning" class="spinner-container">
             <div class="spinner"></div>
         </div>
     </div>
@@ -112,6 +173,10 @@ function onRun() {
   height: 100%;
   width: 100%;
 }
+/* NEW: Change cursor during edit */
+.run-node.is-editing {
+  cursor: default;
+}
 .vue-flow__node-selected .run-node {
   border-color: transparent;
 }
@@ -128,6 +193,8 @@ function onRun() {
   overflow: hidden;
   text-overflow: ellipsis;
   width: 100%;
+  /* NEW: Add text cursor on hover */
+  cursor: text;
 }
 .node-content {
   padding: 12px;
@@ -135,6 +202,8 @@ function onRun() {
   color: #2c3e50;
   flex-grow: 1;
   overflow-y: auto;
+  /* NEW: Add text cursor on hover */
+  cursor: text;
 }
 .content-display {
   margin: 0;
@@ -155,44 +224,42 @@ function onRun() {
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    height: 40px; /* Consistent height for footer */
+    height: 40px;
 }
 .run-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    border: 1px solid #e67e22;
-    background-color: #f39c12;
-    color: white;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 14px;
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+    border: 1px solid #e67e22; background-color: #f39c12; color: white;
+    border-radius: 8px; cursor: pointer; transition: all 0.2s ease;
+    font-family: 'JetBrains Mono', monospace; font-size: 14px;
 }
 .run-btn:hover {
-    background-color: #e67e22;
-    border-color: #d35400;
+    background-color: #e67e22; border-color: #d35400;
 }
-/* Styles for the loading spinner */
 .spinner-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
+    display: flex; justify-content: center; align-items: center; width: 100%;
 }
 .spinner {
-  border: 3px solid rgba(0,0,0,0.1);
-  border-radius: 50%;
-  border-top-color: #d35400; /* Darker orange for visibility */
-  width: 22px;
-  height: 22px;
+  border: 3px solid rgba(0,0,0,0.1); border-radius: 50%;
+  border-top-color: #d35400; width: 22px; height: 22px;
   animation: spin 1s linear infinite;
 }
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* --- NEW: Styles for input fields, adapted from CustomNode.vue --- */
+.title-input {
+  background-color: transparent;
+  color: #3d3f43; /* Match header text color */
+  border: none; outline: none; font-family: 'JetBrains Mono', sans-serif;
+  font-size: 1em; font-weight: bold; width: 100%; padding: 0; margin: 0;
+}
+.content-input {
+  width: 100%; height: 100%; border: none; outline: none; resize: none;
+  background-color: #fdf5e6; /* Light yellow for editing content */
+  border-radius: 4px; padding: 8px; box-sizing: border-box;
+  font-family: 'JetBrains Mono', sans-serif; font-size: 13px; color: #2c3e50;
 }
 
 :deep(.resizer-handle) {

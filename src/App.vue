@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onBeforeUnmount, defineAsyncComponent } from 'vue';
+import { ref, onBeforeUnmount, defineAsyncComponent, onMounted, onUnmounted } from 'vue';
 import { VueFlow, useVueFlow, applyEdgeChanges } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
@@ -17,7 +17,7 @@ const RunNode = defineAsyncComponent(() => import('./components/RunNode.vue'));
 
 let nodeIdCounter = 0;
 
-const { addNodes, addEdges, removeEdges, findNode, removeNodes, project, onPaneMouseMove, getNodes } = useVueFlow();
+const { addNodes, addEdges, removeEdges, findNode, removeNodes, project, onPaneMouseMove, getNodes, getSelectedNodes } = useVueFlow();
 
 const nodes = ref([]);
 const edges = ref([]);
@@ -33,7 +33,7 @@ const isFetchingPipeline = ref(false);
 // State for adding new nodes
 const isAddingNode = ref(false);
 const isAddingRunNode = ref(false);
-
+const isShowingRunNode = ref(true)
 // State for node appearance and behavior
 const newNodeColor = ref('#34495e');
 const runningNodeId = ref(null); // This will hold the ID of the node that is currently "running"
@@ -173,9 +173,8 @@ function placeNodeOnClick(event) {
     data: {
       title: isRunNode ? 'Run Node' : 'New Node',
       content: isRunNode ? 'Ready to run...' : 'Click to edit...',
-      // MODIFIED: Add instruction and problem fields to the data model for persistence
       instruction: '',
-      problem: '',
+      goal: '',
       color: isRunNode ? '#f1c40f' : newNodeColor.value,
       connections: { in: [], out: [] },
       subGraph: { nodes: [], edges: [] },
@@ -242,6 +241,47 @@ onPaneMouseMove((event) => {
     }]);
   }
 });
+
+// --- Node Duplication Logic ---
+function handleDuplicateNode() {
+  const selectedNodes = getSelectedNodes.value;
+  if (selectedNodes.length !== 1) return; 
+
+  const originalNode = selectedNodes[0];
+
+  if (originalNode.id === 'ghost-node') return;
+
+  const newNode = {
+    id: `node-${nodeIdCounter++}`,
+    type: originalNode.type,
+    position: {
+      x: originalNode.position.x + 40,
+      y: originalNode.position.y + 40,
+    },
+    data: {
+      ...JSON.parse(JSON.stringify(originalNode.data)),
+      connections: { in: [], out: [] },
+    },
+  };
+
+  addNodes([newNode]);
+}
+
+function handleKeyDown(event) {
+  if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
+    event.preventDefault();
+    handleDuplicateNode();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown);
+});
+
 
 onBeforeUnmount(() => {
   const flowElement = vueFlowRef.value?.$el;
@@ -394,7 +434,6 @@ async function handleGeneration() {
   }
 }
 
-// MODIFIED: Pass the node's instruction and problem values to the sub-canvas
 function handleOpenSubCanvas(nodeId) {
     const parentNode = findNode(nodeId);
     if (!parentNode) return;
@@ -405,9 +444,8 @@ function handleOpenSubCanvas(nodeId) {
         name: parentNode.data.title || 'Sub-Canvas',
         parentNodeTitle: parentNode.data.title,
         parentNodeContent: parentNode.data.content,
-        // Pass persisted instruction and problem values
         parentNodeInstruction: parentNode.data.instruction,
-        parentNodeProblem: parentNode.data.problem,
+        parentNodeGoal: parentNode.data.goal,
         initialNodes: JSON.parse(JSON.stringify(parentNode.data.subGraph.nodes)),
         initialEdges: JSON.parse(JSON.stringify(parentNode.data.subGraph.edges))
     };
@@ -425,13 +463,17 @@ function handleSubCanvasUpdate(event) {
     }
 }
 
-// NEW: Handler to save instruction/problem data from sub-canvas back to the parent node
 function handleSubCanvasDataUpdate(event) {
     const parentNode = findNode(event.nodeId);
+    console.log("Subcanvas data updated!!!")
     if (parentNode) {
         parentNode.data.instruction = event.instruction;
-        parentNode.data.problem = event.problem;
+        parentNode.data.goal = event.goal;
     }
+}
+
+function handleCreateSnapshotNode (event) {
+
 }
 
 function toggleFreeze() {
@@ -494,6 +536,7 @@ function toggleFreeze() {
             @delete="onNodeDelete"
             @open-canvas="handleOpenSubCanvas"
             @run-node="handleNodeRun"
+            @update-node-data="handleNodeUpdate"
             :is-running="props.id === runningNodeId"
           />
         </template>
@@ -511,13 +554,13 @@ function toggleFreeze() {
           :is-adding-node="isAddingNode"
           :is-adding-run-node="isAddingRunNode"
           v-model:newNodeColor="newNodeColor"
+          :is-show="isShowingRunNode"
           @toggle-freeze="toggleFreeze"
           @toggle-add-node-mode="toggleAddNodeMode"
           @toggle-add-run-node-mode="toggleAddRunNodeMode"
         />
       </div>
 
-      <!-- MODIFIED: Bind new props and event handler for data persistence -->
       <SubCanvas
         v-if="activeSubCanvasData"
         :node-id="activeSubCanvasData.id"
@@ -525,12 +568,13 @@ function toggleFreeze() {
         :parent-node-title="activeSubCanvasData.parentNodeTitle"
         :parent-node-content="activeSubCanvasData.parentNodeContent"
         :parent-node-instruction="activeSubCanvasData.parentNodeInstruction"
-        :parent-node-problem="activeSubCanvasData.parentNodeProblem"
+        :parent-node-goal="activeSubCanvasData.parentNodeGoal"
         :initial-nodes="activeSubCanvasData.initialNodes"
         :initial-edges="activeSubCanvasData.initialEdges"
         @close="handleCloseSubCanvas"
         @update:graph="handleSubCanvasUpdate"
         @update:data="handleSubCanvasDataUpdate"
+        @save-snapshot="handleCreateSnapshotNode"
       />
     </main>
   </div>

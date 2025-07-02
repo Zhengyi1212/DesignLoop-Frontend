@@ -26,11 +26,15 @@ defineProps({
   isAddGroup: {
     type: Boolean,
     default: false,
+  },
+  isShow: {
+    type: Boolean,
+    default: true
   }
 });
 
 // Add a new event for the run node mode
-const emit = defineEmits(['toggle-freeze', 'toggle-add-node-mode', 'toggle-add-run-node-mode', 'update:newNodeColor','toggle-add-group-mode']);
+const emit = defineEmits(['toggle-freeze', 'toggle-add-node-mode', 'toggle-add-run-node-mode', 'update:newNodeColor', 'toggle-add-group-mode']);
 
 const colorPicker = ref(null);
 
@@ -58,70 +62,64 @@ function handleGroupClick() {
 function openColorPicker() {
   colorPicker.value.click();
 }
+
+//function handleUnshow() {
+ // emit('is-showing-runnode')
+//}
 </script>
 
 <template>
   <div class="toolbar-container">
     <div class="tool-section">
-      <button
-        class="tool-button"
-        :class="{ active: isAddingNode }"
+      <button class="tool-button" :class="{ active: isAddingNode }"
         :style="{ backgroundColor: isAddingNode ? newNodeColor : '', borderColor: isAddingNode ? newNodeColor : '' }"
-        @click="handleAddNodeClick"
-        title="Click to add a new customizable node."
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+        @click="handleAddNodeClick" title="Click to add a new customizable node.">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        </svg>
         <span>New Node</span>
       </button>
 
       <!-- New Button: Run Node -->
-      <button
-        class="tool-button"
-        :class="{ active: isAddingRunNode }"
-        @click="handleAddRunNodeClick"
-        title="Click to add a new executable Run Node"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+      <button v-if="isShow" class="tool-button" :class="{ active: isAddingRunNode }"
+        @click="handleAddRunNodeClick" title="Click to add a new executable Run Node">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
         <span>Run Node</span>
       </button>
 
-      <button
-        class="tool-button"
-        :class="{ active: isAddGroup }"
+      <button class="tool-button" :class="{ active: isAddGroup }"
         :style="{ backgroundColor: isAddGroup ? newGroupColor : '', borderColor: isAddingGroup ? newGroupColor : '' }"
-        @click="handleGroupClick"
-        title="Click to add a new group base."
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="6" ry="6"></rect></svg>
+        @click="handleGroupClick" title="Click to add a new group base.">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="6" ry="6"></rect>
+        </svg>
         <span>New Group</span>
       </button>
 
-      <button
-        class="tool-button color-picker-btn"
-        @click="openColorPicker"
-        title="Select new node color"
-      >
+      <button class="tool-button color-picker-btn" @click="openColorPicker" title="Select new node color">
         <div class="color-swatch" :style="{ backgroundColor: newNodeColor }"></div>
-        
-        <input
-          type="color"
-          ref="colorPicker"
-          :value="newNodeColor"
-          @input="onColorChange"
-          class="hidden-color-input"
-        />
+
+        <input type="color" ref="colorPicker" :value="newNodeColor" @input="onColorChange" class="hidden-color-input" />
       </button>
     </div>
 
     <div class="tool-section">
-      <button
-        @click="handleFreezeClick"
-        class="tool-button"
-        :class="{ active: isFrozen }"
-        title="Toggle node movement"
-      >
-        <svg v-if="isFrozen" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"></path></svg>
+      <button @click="handleFreezeClick" class="tool-button" :class="{ active: isFrozen }" title="Toggle node movement">
+        <svg v-if="isFrozen" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+        </svg>
         <span>{{ isFrozen ? ' Unfreeze' : 'Freeze' }}</span>
       </button>
     </div>
@@ -141,11 +139,13 @@ function openColorPicker() {
   border-top: 1px solid #dee2e6;
   box-sizing: border-box;
 }
+
 .tool-section {
-    display: flex;
-    align-items: center;
-    gap: 15px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
 }
+
 .tool-button {
   display: flex;
   align-items: center;
@@ -160,32 +160,39 @@ function openColorPicker() {
   font-size: 14px;
   color: #343a40;
 }
+
 .tool-button:hover {
   background-color: #f8f9fa;
   border-color: #adb5bd;
 }
+
 .tool-button.active {
-    background-color: #007bff;
-    color: white;
-    border-color: #007bff;
+  background-color: #007bff;
+  color: white;
+  border-color: #007bff;
 }
+
 .tool-button.active svg {
-    stroke: white;
+  stroke: white;
 }
+
 /* Style for the active Run Node button */
 .tool-button:nth-child(2).active {
-    background-color: #f39c12;
-    border-color: #f39c12;
+  background-color: #f39c12;
+  border-color: #f39c12;
 }
+
 .color-picker-btn {
   position: relative;
 }
+
 .color-swatch {
   width: 18px;
   height: 18px;
   border-radius: 4px;
   border: 1px solid #e2e8f0;
 }
+
 .hidden-color-input {
   position: absolute;
   top: 0;

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onUnmounted, onBeforeUnmount } from 'vue';
+import { ref, watch, onUnmounted, onBeforeUnmount, onMounted } from 'vue';
 import { VueFlow, useVueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
@@ -8,7 +8,7 @@ import CustomNode from './CustomNode.vue';
 import RunNode from './RunNode.vue'; // Import RunNode
 import EditModal from './EditModal.vue';
 
-// --- 您可以在这里调整偏移量 ---
+
 const GHOST_NODE_OFFSET_X = -100;
 const GHOST_NODE_OFFSET_Y = -75;
 // ------------------------------
@@ -37,12 +37,14 @@ const nodes = ref(props.initialNodes);
 const edges = ref(props.initialEdges);
 let subNodeIdCounter = 0;
 const isAddingNode = ref(false);
+const isShowingRunNode = ref(false);
 const vueFlowRef = ref(null);
 const chainList = ref(null)
 
-const instruction = ref(props.parentNodeInstruction || '');
-const problem = ref(props.parentNodeProblem || '');
+const instruction = ref( props.parentNodeInstruction || '');
+const goal = ref(props.parentNodeGoal || '');
 const isSubCanvasRunning = ref(false);
+const isSaveButtonRunning = ref(false)
 const runningSubNodeId = ref(null); // To handle running state for nodes inside sub-canvas
 
 const newNodeColor = ref('#34495e');
@@ -123,11 +125,49 @@ subflow.onPaneMouseMove((event) => {
   }
 });
 
+// --- NEW: Node Duplication Logic for Sub-Canvas ---
+function handleDuplicateSubNode() {
+  const selectedNodes = subflow.getSelectedNodes.value;
+  if (selectedNodes.length !== 1) return; // Only duplicate one at a time
+
+  const originalNode = selectedNodes[0];
+  if (originalNode.id === 'ghost-node') return;
+
+  const newNode = {
+    id: `sub-node-${props.nodeId}-${subNodeIdCounter++}`,
+    type: originalNode.type,
+    position: {
+      x: originalNode.position.x + 40,
+      y: originalNode.position.y + 40,
+    },
+    data: {
+      ...JSON.parse(JSON.stringify(originalNode.data)),
+      connections: { in: [], out: [] },
+    },
+  };
+
+  subflow.addNodes([newNode]);
+}
+
+function handleKeyDown(event) {
+  if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
+    event.preventDefault();
+    handleDuplicateSubNode();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown);
+});
+
+
 onBeforeUnmount(() => {
   const flowElement = vueFlowRef.value?.$el;
   if (flowElement) {
     flowElement.removeEventListener('click', placeNodeOnClick, true);
   }
+  // NEW: Clean up keydown listener to avoid conflicts
+  window.removeEventListener('keydown', handleKeyDown);
 });
 
 
@@ -173,7 +213,7 @@ function onFieldBlur() {
   emit('update:data', {
     nodeId: props.nodeId,
     instruction: instruction.value,
-    problem: problem.value,
+    goal: goal.value,
   });
 }
 
@@ -240,7 +280,7 @@ async function handleSubNodeRun(nodeId) {
       //parent_content: props.parentNodeContent,
       // Data from the sub-canvas text fields
       instruction: instruction.value,
-      problem: problem.value,
+      goal: goal.value,
       chain: chainList,
       // Data specific to the node being run
       node_content: originalContent,
@@ -282,7 +322,7 @@ async function handleSubCanvasRun() {
       node_title: props.parentNodeTitle,
       node_content: props.parentNodeContent,
       instruction: instruction.value,
-      problem: problem.value,
+      goal: goal.value,
       //subgraph: {
       //  nodes: subflow.getNodes.value,
       //edges: subflow.getEdges.value,
@@ -347,7 +387,50 @@ function onDragEnd() {
 onUnmounted(() => {
   window.removeEventListener('mousemove', onDragMove);
   window.removeEventListener('mouseup', onDragEnd);
+  // Note: The keydown listener is cleaned up in onBeforeUnmount
 });
+
+
+async function handleSaveButton() {
+  
+  if (isSaveButtonRunning.value) return;
+  isSaveButtonRunning.value = true;
+
+  try {
+    // 1. 收集定义当前子画布状态所需的所有数据
+    const snapshotPayload = {
+      // cube的title ==> instruction? or goal
+      title: `Version of: ${goal}`,
+
+      // 保存所有核心数据。我们使用深拷贝 (JSON.parse/stringify)
+      // 来确保保存的是一个独立的副本，而不是对当前状态的引用。 
+      data: {
+        instruction: instruction.value,
+        goal: goal.value,
+        // 保存子画布内部的完整图表结构
+        subGraph: {
+          nodes: JSON.parse(JSON.stringify(subflow.getNodes.value)),
+          edges: JSON.parse(JSON.stringify(subflow.getEdges.value)),
+        }
+      }
+    };
+
+    // 2. 发出一个自定义事件，并将收集到的所有数据作为“包裹”发送出去
+    //    父组件 (App.vue) 将会监听这个 'save-snapshot' 事件
+    emit('save-snapshot', snapshotPayload);
+
+    console.log('Sub-canvas state snapshot emitted successfully!');
+
+  } catch (error) {
+    // 如果在过程中出现错误，在控制台打印出来
+    console.error("Error creating sub-canvas snapshot:", error);
+  } finally {
+    // 无论成功还是失败，最后都将按钮恢复为可点击状态
+    isSaveButtonRunning.value = false;
+  }
+}
+
+
 </script>
 
 <template>
@@ -356,24 +439,29 @@ onUnmounted(() => {
       <div class="sub-canvas-header" @mousedown="onHeaderMouseDown">
         <span class="title">✏️ {{ nodeName }}</span>
         <div class="header-actions">
-
+           <button class="save-btn" @click="handleSaveButton" :disabled="isSaveButtonRunning" title="Save Sub-Canvas">
+          <div v-if="isSaveButtonRunning" class="spinner"></div>
+          <span>Save</span>
+        </button>
           <button @click="emit('close')" class="close-btn" title="Close Canvas">×</button>
         </div>
       </div>
       <div class="upper-area">
       <div class="sub-canvas-fields">
         <div class="field">
+          <label for="goal">Goal</label>
+          <textarea id="goal" v-model="goal" @blur="onFieldBlur" :placeholder="'Describe the goal here...'"
+            rows="3"></textarea>
+        </div>
+        <div class="field">
           <label for="instruction">Instruction</label>
           <textarea id="instruction" v-model="instruction" @blur="onFieldBlur"
             :placeholder="'Enter instructions here...'" rows="3"></textarea>
         </div>
-        <div class="field">
-          <label for="problem">Goal</label>
-          <textarea id="problem" v-model="problem" @blur="onFieldBlur" :placeholder="'Describe the goal here...'"
-            rows="3"></textarea>
-        </div>
+        
       </div>
       <div class="run-button-wrapper">
+        
         <button class="run-btn" @click="handleSubCanvasRun" :disabled="isSubCanvasRunning" title="Run Sub-Canvas Logic">
           <div v-if="isSubCanvasRunning" class="spinner"></div>
           <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
@@ -391,7 +479,6 @@ onUnmounted(() => {
             <CustomNode v-bind="customProps" @delete="subflow.removeNodes([$event])"
               @open-canvas="handleNodeDoubleClick" />
           </template>
-          <!-- NEW: Template for rendering Run Nodes inside the sub-canvas -->
           <template #node-run="runProps">
             <RunNode v-bind="runProps" @delete="subflow.removeNodes([$event])" @run-node="handleSubNodeRun"
               :is-running="runningSubNodeId === runProps.id" />
@@ -402,7 +489,7 @@ onUnmounted(() => {
       </div>
 
       <div class="sub-canvas-toolbar-wrapper">
-        <Toolbar :is-frozen="isFrozen" :is-adding-node="isAddingNode" v-model:newNodeColor="newNodeColor"
+        <Toolbar :is-frozen="isFrozen" :is-adding-node="isAddingNode" :is-show="isShowingRunNode" v-model:newNodeColor="newNodeColor"
           @toggle-freeze="toggleFreeze" @toggle-add-node-mode="toggleAddNodeMode" />
       </div>
     </div>
@@ -529,6 +616,34 @@ onUnmounted(() => {
 
   justify-content: flex-end;
 }
+.save-btn {
+  display: flex;
+  align-items: center;
+  justify-content: right;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 1px solid lightblue;
+  background-color: lightblue;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  min-width: 80px;
+  height: 32px;
+}
+.save-btn:hover:not(:disabled) {
+  background-color: rgb(96, 157, 222);
+  border-color: rgb(96, 157, 222);
+}
+
+.save-btn:disabled {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  cursor: not-allowed;
+}
+
 .run-btn {
   display: flex;
   align-items: center;

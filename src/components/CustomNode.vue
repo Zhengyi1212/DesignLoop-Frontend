@@ -9,29 +9,24 @@ const props = defineProps({
   selected: { type: Boolean, default: false },
 });
 
-// Add a new event for updating node data
-const emit = defineEmits(['delete', 'open-canvas', 'update-node-data']);
+// MODIFIED: Add 'snapshot-dropped' to the list of emitted events.
+const emit = defineEmits(['delete', 'open-canvas', 'update-node-data', 'snapshot-dropped']);
 
-// --- New Feature: In-place Editing ---
-
+// --- In-place Editing Logic (Unchanged) ---
 const isEditingTitle = ref(false);
 const isEditingContent = ref(false);
 const titleInput = ref(null);
 const contentInput = ref(null);
 
-// Function to enter title editing mode
 function startEditTitle() {
-  // Do not allow editing for the ghost node
   if (props.id === 'ghost-node') return;
   isEditingTitle.value = true;
-  // Use nextTick to ensure the input is in the DOM before we try to focus it
   nextTick(() => {
     titleInput.value?.focus();
     titleInput.value?.select();
   });
 }
 
-// Function to enter content editing mode
 function startEditContent() {
   if (props.id === 'ghost-node') return;
   isEditingContent.value = true;
@@ -40,9 +35,7 @@ function startEditContent() {
   });
 }
 
-// Function to save changes and exit editing mode
 function saveChanges() {
-  // Emit an event with the node's ID and the new data
   emit('update-node-data', {
     id: props.id,
     data: {
@@ -50,13 +43,44 @@ function saveChanges() {
       content: props.data.content,
     }
   });
-  // Reset editing flags
   isEditingTitle.value = false;
   isEditingContent.value = false;
 }
 
-// --- Existing Computed Properties ---
+// --- NEW: Drag and Drop Snapshot Logic ---
+const isDraggingOver = ref(false);
 
+function onDragOver(event) {
+  event.preventDefault();
+  // Provide visual feedback only if the dragged item is a snapshot.
+  if (event.dataTransfer.types.includes('application/json/snapshot')) {
+    isDraggingOver.value = true;
+    event.dataTransfer.dropEffect = 'copy'; // Show a 'copy' cursor
+  }
+}
+
+function onDragLeave() {
+  isDraggingOver.value = false;
+}
+
+function onDrop(event) {
+  event.preventDefault();
+  isDraggingOver.value = false;
+  
+  const snapshotDataString = event.dataTransfer.getData('application/json/snapshot');
+  if (!snapshotDataString) return;
+
+  try {
+    const snapshotData = JSON.parse(snapshotDataString);
+    console.log(snapshotData.goal)
+    // Emit an event to the parent (App.vue) with the node's ID and the dropped data.
+    emit('snapshot-dropped', { nodeId: props.id, snapshotData });
+  } catch (e) {
+    console.error("Failed to parse snapshot data on drop:", e);
+  }
+}
+
+// --- Computed Properties & Functions (Unchanged) ---
 const nodeHeaderStyle = computed(() => ({
   backgroundColor: props.data.color || '#34495e'
 }));
@@ -70,14 +94,11 @@ const nodeSelectionStyle = computed(() => {
   return {};
 });
 
-// --- Existing Functions ---
-
 function onDelete() {
   emit('delete', props.id);
 }
 
 function onOpenCanvas() {
-  // Do not open sub-canvas if we are currently editing text
   if (isEditingTitle.value || isEditingContent.value) return;
   if (props.id === 'ghost-node') return;
   emit('open-canvas', props.id);
@@ -87,12 +108,18 @@ function onOpenCanvas() {
 <template>
   <div
     class="custom-node"
-    :class="{ 'is-editing': isEditingTitle || isEditingContent }"
+    :class="{ 
+      'is-editing': isEditingTitle || isEditingContent,
+      'is-dragging-over': isDraggingOver  // NEW: Add class for drop feedback
+    }"
     :style="[
       id === 'ghost-node' ? { pointerEvents: 'none' } : {},
       nodeSelectionStyle
     ]"
     @dblclick="onOpenCanvas"
+    @dragover.prevent="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
   >
     <NodeResizer
       v-if="id !== 'ghost-node'"
@@ -111,11 +138,10 @@ function onOpenCanvas() {
     </template>
 
     <div class="node-header" :style="nodeHeaderStyle">
-      <!-- Title Section: Toggles between display and input -->
       <strong
         v-if="!isEditingTitle"
         @click.stop="startEditTitle"
-        title=""
+        title="Click to edit title"
       >
         {{ data.title || 'New Node' }}
       </strong>
@@ -132,8 +158,7 @@ function onOpenCanvas() {
       <button v-if="id !== 'ghost-node' && !isEditingTitle" class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
     </div>
 
-    <div class="node-content" @click.stop="startEditContent" title="">
-      <!-- Content Section: Toggles between display and textarea -->
+    <div class="node-content" @click.stop="startEditContent" title="Click to edit content">
       <p v-if="!isEditingContent" class="content-display">{{ data.content || '' }}</p>
       <textarea
         v-else
@@ -154,12 +179,19 @@ function onOpenCanvas() {
   border-radius: 8px;
   font-family: 'JetBrains Mono', sans-serif;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition: all 0.2s ease-in-out;
   cursor: grab;
   display: flex;
   flex-direction: column;
   height: 100%;
   width: 100%;
+}
+/* NEW: Style for when a snapshot is being dragged over the node */
+.custom-node.is-dragging-over {
+  outline: 3px dashed #2ecc71;
+  outline-offset: 4px;
+  box-shadow: 0 0 20px rgba(46, 204, 113, 0.5);
+  transform: scale(1.02);
 }
 .custom-node.is-editing {
   cursor: default;

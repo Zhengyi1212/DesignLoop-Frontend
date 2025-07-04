@@ -131,9 +131,9 @@ function openColorPicker() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 25px;
+  padding: 20px 20px;
   gap: 20px;
-  height: 70px;
+  height: 80px;
   background-color: #ffffff;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
   border-top: 1px solid #dee2e6;
@@ -153,7 +153,7 @@ function openColorPicker() {
   padding: 8px 15px;
   border: 1px solid #ced4da;
   background-color: #fff;
-  border-radius: 8px;
+  border-radius: 18px;
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: 'JetBrains Mono', monospace;

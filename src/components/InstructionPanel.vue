@@ -72,7 +72,7 @@ function onGenerate() {
     <div class="panel-footer">
       <button class="generate-btn" @click="onGenerate" :disabled="isGenerating">
         <div v-if="isGenerating" class="spinner"></div>
-        <span v-else>Generate</span>
+        <span v-else>生成</span>
       </button>
     </div>
   </aside>
@@ -88,11 +88,11 @@ function onGenerate() {
   top: 0;
   left: 0;
   height: 100vh;
-  width: 210px;
+  width: 200px;
   /* STYLE CHANGE: Reverted to the clean, solid background color. */
   background-color: #f8f9fa;
   border-right: 1px solid #dee2e6;
-  padding: 20px 15px; /* Adjusted horizontal padding */
+  padding: 15px 15px; /* Adjusted horizontal padding */
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -138,7 +138,7 @@ function onGenerate() {
 
 .panel-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 12px;
   font-weight: 500;
   color: #4a5568;
 }
@@ -150,7 +150,7 @@ function onGenerate() {
   border-radius: 8px;
   padding: 12px;
   font-family: 'JetBrains Mono', 'Helvetica Neue', Arial, sans-serif;
-  font-size: 14px;
+  font-size: 10px;
   color: #2d3748;
   resize: none;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);

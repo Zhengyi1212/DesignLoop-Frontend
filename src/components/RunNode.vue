@@ -3,7 +3,6 @@ import { computed, ref, nextTick } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
-// Add the new isRunning prop to receive the loading state
 const props = defineProps({
   id: { type: String, required: true },
   data: { type: Object, required: true },
@@ -11,11 +10,10 @@ const props = defineProps({
   isRunning: { type: Boolean, default: false },
 });
 
-// NEW: Add 'update-node-data' to the list of emits
-const emit = defineEmits(['delete', 'open-canvas', 'run-node', 'update-node-data']);
+// MODIFIED: Add 'snapshot-dropped' to the list of emitted events.
+const emit = defineEmits(['delete', 'open-canvas', 'run-node', 'update-node-data', 'snapshot-dropped']);
 
-// --- NEW: In-place Editing Logic ---
-
+// --- In-place Editing Logic (Unchanged) ---
 const isEditingTitle = ref(false);
 const isEditingContent = ref(false);
 const titleInput = ref(null);
@@ -50,8 +48,39 @@ function saveChanges() {
   isEditingContent.value = false;
 }
 
-// --- Component Specific Logic (Unchanged) ---
+// --- NEW: Drag and Drop Snapshot Logic ---
+const isDraggingOver = ref(false);
 
+function onDragOver(event) {
+  event.preventDefault();
+  // Provide visual feedback only if the dragged item is a snapshot.
+  if (event.dataTransfer.types.includes('application/json/snapshot')) {
+    isDraggingOver.value = true;
+    event.dataTransfer.dropEffect = 'copy'; // Show a 'copy' cursor
+  }
+}
+
+function onDragLeave() {
+  isDraggingOver.value = false;
+}
+
+function onDrop(event) {
+  event.preventDefault();
+  isDraggingOver.value = false;
+  
+  const snapshotDataString = event.dataTransfer.getData('application/json/snapshot');
+  if (!snapshotDataString) return;
+
+  try {
+    const snapshotData = JSON.parse(snapshotDataString);
+    // Emit an event to the parent (App.vue) with the node's ID and the dropped data.
+    emit('snapshot-dropped', { nodeId: props.id, snapshotData });
+  } catch (e) {
+    console.error("Failed to parse snapshot data on drop:", e);
+  }
+}
+
+// --- Component Specific Logic & Handlers (Unchanged) ---
 const nodeHeaderStyle = computed(() => {
   return {
     backgroundColor: '#f1c40f',
@@ -68,14 +97,11 @@ const nodeSelectionStyle = computed(() => {
   return {};
 });
 
-// --- Event Handlers (Updated) ---
-
 function onDelete() {
   emit('delete', props.id);
 }
 
 function onOpenCanvas() {
-  // MODIFIED: Prevent opening canvas while editing
   if (isEditingTitle.value || isEditingContent.value) return;
   if (props.id === 'ghost-node') return;
   emit('open-canvas', props.id);
@@ -90,12 +116,18 @@ function onRun() {
 <template>
   <div
     class="run-node"
-    :class="{ 'is-editing': isEditingTitle || isEditingContent }"
+    :class="{ 
+      'is-editing': isEditingTitle || isEditingContent,
+      'is-dragging-over': isDraggingOver // NEW: Add class for drop feedback
+    }"
     :style="[
       id === 'ghost-node' ? { pointerEvents: 'none' } : {},
       nodeSelectionStyle
     ]"
     @dblclick="onOpenCanvas"
+    @dragover.prevent="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
   >
     <NodeResizer
       v-if="id !== 'ghost-node'"
@@ -172,8 +204,15 @@ function onRun() {
   flex-direction: column;
   height: 100%;
   width: 100%;
+  transition: all 0.2s ease-in-out;
 }
-/* NEW: Change cursor during edit */
+/* NEW: Style for when a snapshot is being dragged over the node */
+.run-node.is-dragging-over {
+  outline: 3px dashed #2ecc71;
+  outline-offset: 4px;
+  box-shadow: 0 0 20px rgba(46, 204, 113, 0.5);
+  transform: scale(1.02);
+}
 .run-node.is-editing {
   cursor: default;
 }
@@ -193,7 +232,6 @@ function onRun() {
   overflow: hidden;
   text-overflow: ellipsis;
   width: 100%;
-  /* NEW: Add text cursor on hover */
   cursor: text;
 }
 .node-content {
@@ -202,7 +240,6 @@ function onRun() {
   color: #2c3e50;
   flex-grow: 1;
   overflow-y: auto;
-  /* NEW: Add text cursor on hover */
   cursor: text;
 }
 .content-display {
@@ -247,17 +284,15 @@ function onRun() {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
-
-/* --- NEW: Styles for input fields, adapted from CustomNode.vue --- */
 .title-input {
   background-color: transparent;
-  color: #3d3f43; /* Match header text color */
+  color: #3d3f43;
   border: none; outline: none; font-family: 'JetBrains Mono', sans-serif;
   font-size: 1em; font-weight: bold; width: 100%; padding: 0; margin: 0;
 }
 .content-input {
   width: 100%; height: 100%; border: none; outline: none; resize: none;
-  background-color: #fdf5e6; /* Light yellow for editing content */
+  background-color: #fdf5e6;
   border-radius: 4px; padding: 8px; box-sizing: border-box;
   font-family: 'JetBrains Mono', sans-serif; font-size: 13px; color: #2c3e50;
 }

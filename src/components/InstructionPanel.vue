@@ -138,7 +138,7 @@ function onGenerate() {
 
 .panel-header h3 {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: #4a5568;
 }
@@ -150,7 +150,7 @@ function onGenerate() {
   border-radius: 8px;
   padding: 12px;
   font-family: 'JetBrains Mono', 'Helvetica Neue', Arial, sans-serif;
-  font-size: 10px;
+  font-size: 11px;
   color: #2d3748;
   resize: none;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);

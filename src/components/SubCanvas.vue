@@ -355,7 +355,7 @@ async function handleSubCanvasRun() {
     }
     // --- End of new logic ---
 
-    const url = "http://127.0.0.1:7001/api/generate-thinking-chain";
+    const url = "/api/generate-thinking-chain";
     const payload = {
       design_background: props.designBackground,
       design_goal: props.designGoal,

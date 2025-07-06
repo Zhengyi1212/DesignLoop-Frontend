@@ -141,7 +141,7 @@ async function handleNodeRun(nodeId) {
     node.data.content = 'Running...';
     const successors = findSuccessors(nodeId, getNodes.value, edges.value);
     try {
-        const url = "http://127.0.0.1:7001/api/brainstorm";
+        const url = "/api/brainstorm";
         const payload = {
             design_background: instructionPanels.value[1].content,
             design_goal: instructionPanels.value[2].content,
@@ -357,7 +357,7 @@ function onNodeDelete(nodeIdToDelete) {
 async function handleFetchPipeline() {
   isFetchingPipeline.value = true;
   try {
-    const url = "http://127.0.0.1:7001/api/pipeline";
+    const url = "/api/pipeline";
     const payload = {
       user_id: instructionPanels.value[0].content,
       design_background: instructionPanels.value[1].content,
@@ -424,7 +424,7 @@ function node_chain_autogene(nodeData) {
 async function handleGeneration() {
   isGenerating.value = true;
   try {
-    const url = "http://127.0.0.1:7001/api/generate-node-chain";
+    const url = "/api/generate-node-chain";
     const payload = {
       pipeline: instructionPanels.value[3].content,
       design_background: instructionPanels.value[1].content,

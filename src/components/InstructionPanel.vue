@@ -72,7 +72,7 @@ function onGenerate() {
     <div class="panel-footer">
       <button class="generate-btn" @click="onGenerate" :disabled="isGenerating">
         <div v-if="isGenerating" class="spinner"></div>
-        <span v-else>生成</span>
+        <span v-else>Generate</span>
       </button>
     </div>
   </aside>

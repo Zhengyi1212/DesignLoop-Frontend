@@ -15,10 +15,10 @@ const { onDragStart } = useDragAndDrop();
   <div class="canvas-node-panel">
     <h3 class="panel-title">
       
-      Canvas Snapshots
+      LLM Chains
     </h3>
     <div v-if="snapshots.length === 0" class="empty-state">
-      <p>No snapshots saved yet.</p>
+      <p>No LLM chain saved yet.</p>
       
     </div>
     <div v-else class="snapshots-list">

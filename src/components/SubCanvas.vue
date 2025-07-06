@@ -8,9 +8,13 @@ import CustomNode from './CustomNode.vue';
 import RunNode from './RunNode.vue';
 import EditModal from './EditModal.vue';
 
+import ChainNode from './ChainNode.vue';
+
 
 const GHOST_NODE_OFFSET_X = -100;
 const GHOST_NODE_OFFSET_Y = -75;
+// NEW: Define vertical offset for the generated text node
+const TEXT_NODE_OFFSET_Y = -120;
 
 // ---- Props & Emits ----
 const props = defineProps({
@@ -22,6 +26,8 @@ const props = defineProps({
   parentNodeContent: { type: String, default: '' },
   parentNodeInstruction: { type: String, default: '' },
   parentNodeGoal: { type: String, default: '' },
+  designBackground : { type: String, default: '' },
+  designGoal : { type: String, default: '' },
 });
 
 // MODIFIED: Added 'save-snapshot' to the list of emitted events.
@@ -229,23 +235,34 @@ function onFieldBlur() {
   });
 }
 
-function generateNodeChain(nodeContents) {
-  if (!Array.isArray(nodeContents) || nodeContents.length === 0) return;
+function generateNodeChain(nodeDataList) {
+  if (!Array.isArray(nodeDataList) || nodeDataList.length === 0) return;
   const newNodes = [];
   const newEdges = [];
   const startX = 100;
   const startY = 200;
   const gapX = 250;
-  nodeContents.forEach((content, index) => {
+
+  nodeDataList.forEach((element, index) => {
+    // Extract the value from the 'step_summary' key for the node's content.
+    const content = element.step_summary || '';
+
     const newNode = {
-      id: `sub-run-node-${props.nodeId}-${subNodeIdCounter++}`,
-      type: 'run',
+      id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter++}`,
+      type: 'chain',
       position: { x: startX + index * gapX, y: startY },
-      style: { width: '200px', height: '150px' },
-      data: { title: `Generated Step ${index + 1}`, content: content },
+      width: 200,
+      height: 100,
+      data: {
+        content: content,
+        connections: { in: [], out: [] },
+        subGraph: { nodes: [], edges: [] },
+        detailed_explanation: element.detailed_explanation
+      },
     };
     newNodes.push(newNode);
   });
+
   for (let i = 1; i < newNodes.length; i++) {
     const sourceNode = newNodes[i - 1];
     const targetNode = newNodes[i];
@@ -265,67 +282,107 @@ function generateNodeChain(nodeContents) {
   subflow.addEdges(newEdges);
 }
 
-async function handleSubNodeRun(nodeId) {
-  const node = subflow.findNode(nodeId);
-  if (!node || runningSubNodeId.value) return;
-  runningSubNodeId.value = nodeId;
-  const originalContent = node.data.content;
-  node.data.content = 'Running...';
-  try {
-    const url = "http://127.0.0.1:7001/thinking-chain-node";
-    const payload = {
-      instruction: instruction.value,
-      goal: goal.value,
-      chain: chainList.value,
-      node_content: originalContent,
-    };
-    console.log(`%c[Sub-Canvas] Running node ${nodeId} with payload:`, 'color: #3498db; font-weight: bold;', payload);
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: response.statusText }));
-      throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
+function handleGenerateTextNode({ sourceNodeId, position }) {
+    const sourceNode = subflow.findNode(sourceNodeId);
+    if (!sourceNode) return;
+
+    // --- NEW: Prevent creating a duplicate content node ---
+    if (sourceNode.data.generatedContentNodeId && subflow.findNode(sourceNode.data.generatedContentNodeId)) {
+        console.log("Content node already exists.");
+        return; // Exit if the content node has already been created
     }
-    const result = await response.json();
-    node.data.content = result.output || 'Finished.';
-    console.log(`%c[Sub-Canvas] Node ${nodeId} finished with result:`, 'color: #2ecc71;', result);
-  } catch (error) {
-    console.error(`Error running sub-node ${nodeId}:`, error);
-    node.data.content = `Error: ${error.message}`;
-  } finally {
-    runningSubNodeId.value = null;
-  }
+    // ---
+
+    const contentNode = {
+        id: `sub-text-node-${props.nodeId}-${subNodeIdCounter++}`,
+        type: 'chain',
+        position: {
+            x: position.x - 50, // Center the larger node over the smaller one
+            y: position.y + TEXT_NODE_OFFSET_Y - 50, // Adjust vertical position further
+        },
+        // Make the new node larger
+        width: 300,
+        height: 160,
+        data: {
+            // Use the stored fullContent
+            content: sourceNode.data.detailed_explanation,
+            isTextNode: true, // Flag for different styling
+            connections: { in: [], out: [] },
+            subGraph: { nodes: [], edges: [] },
+        },
+    };
+
+    // --- NEW: Create an edge to link the new node to its source ---
+    const newEdge = {
+        id: `sub-content-edge-${contentNode.id}-to-${sourceNode.id}`,
+        // Note: The edge goes FROM the new content node TO the original summary node
+        source: contentNode.id,
+        target: sourceNode.id,
+        sourceHandle: 'bottom', // From the bottom of the new content node
+        targetHandle: 'top',   // To the top of the original summary node
+        type: 'custom',
+        animated: true,
+    };
+    // ---
+
+    // Update the source node to track its content node
+    sourceNode.data.generatedContentNodeId = contentNode.id;
+
+    // Add the new node and the new edge to the canvas
+    subflow.addNodes([contentNode]);
+    subflow.addEdges([newEdge]);
 }
 
 async function handleSubCanvasRun() {
   if (isSubCanvasRunning.value) return;
   isSubCanvasRunning.value = true;
+  
   try {
+    const userInstruction = instruction.value?.trim();
+    const userGoal = goal.value?.trim();
+
+    if (!userInstruction || !userGoal) {
+      alert("Please provide both an instruction and a goal for the exploration.");
+      return; // Stop the execution
+    }
+
+    // --- NEW: Logic to remove previously generated chain nodes and text nodes ---
+    const nodesToRemove = subflow.getNodes.value.filter(n => 
+        n.id.startsWith('sub-chain-node-') || n.id.startsWith('sub-text-node-')
+    );
+    if (nodesToRemove.length > 0) {
+        subflow.removeNodes(nodesToRemove.map(n => n.id));
+    }
+    // --- End of new logic ---
+
     const url = "http://127.0.0.1:7001/generate-thinking-chain";
     const payload = {
+      design_background: props.designBackground,
+      design_goal: props.designGoal,
       node_title: props.parentNodeTitle,
       node_content: props.parentNodeContent,
-      instruction: instruction.value,
-      goal: goal.value,
+      instruction: userInstruction,
+      goal: userGoal,
     };
-    console.log('%c[Sub-Canvas] Running with payload:', 'color: purple; font-weight: bold;', payload);
+
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: response.statusText }));
-      throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
+      const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(`Server responded with ${response.status}: ${errorData.detail || response.statusText}`);
     }
+
     const data = await response.json();
-    chainList.value = data
+    chainList.value = data;
     generateNodeChain(data);
+
   } catch (error) {
     console.error("Error during sub-canvas run:", error);
+    alert(`An error occurred: ${error.message}`);
   } finally {
     isSubCanvasRunning.value = false;
   }
@@ -408,6 +465,14 @@ onUnmounted(() => {
           <template #node-run="runProps">
             <RunNode v-bind="runProps" @delete="subflow.removeNodes([$event])" @run-node="handleSubNodeRun" :is-running="runningSubNodeId === runProps.id" />
           </template>
+          <template #node-chain="chainProps">
+            <ChainNode
+              v-bind="chainProps"
+              @delete="subflow.removeNodes([$event])"
+              @add-text-node="handleGenerateTextNode"
+            />
+          </template>
+
           <Background />
           <Controls />
         </VueFlow>
@@ -418,6 +483,7 @@ onUnmounted(() => {
     </div>
     <EditModal :show="isEditModalVisible" :node-data="editingNode" @close="isEditModalVisible = false" @save="handleNodeSave" />
   </div>
+
 </template>
 
 <style scoped>

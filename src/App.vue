@@ -148,6 +148,7 @@ async function handleNodeRun(nodeId) {
             node_title: node.data.title,
             successors: successors,
         };
+        console.log("Su:", successors)
         const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -362,21 +363,31 @@ async function handleFetchPipeline() {
       design_background: instructionPanels.value[1].content,
       design_goal: instructionPanels.value[2].content,
     };
-    console.log(payload)
+    console.log("Sending payload to /pipeline:", payload);
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText }));
-        throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
+      const errorData = await response.json().catch(() => ({ message: response.statusText }));
+      throw new Error(`Server responded with ${response.status}: ${errorData.message || 'Unknown error'}`);
     }
+
     const data = await response.json();
-    console.log(data.pipeline)
-    instructionPanels.value[3].content = data.pipeline;
+    console.log("Received raw pipeline data:", data.pipeline);
+
+    if (Array.isArray(data.pipeline)) {
+      // 2. Join the array elements with a newline character ('\n')
+      instructionPanels.value[3].content = data.pipeline.join('\n');
+    } else {
+      // Fallback for safety, in case the data is not an array
+      instructionPanels.value[3].content = String(data.pipeline);
+    }
+
   } catch (error) {
-    console.error("Error during generation request:", error);
+    console.error("Error during pipeline request:", error);
   } finally {
     isFetchingPipeline.value = false;
   }
@@ -447,6 +458,8 @@ function handleOpenSubCanvas(nodeId) {
         parentNodeContent: parentNode.data.content,
         parentNodeInstruction: parentNode.data.instruction,
         parentNodeGoal: parentNode.data.goal,
+        designBackgroud : instructionPanels.value[1].content,
+        designGoal: instructionPanels.value[2].content,
         initialNodes: JSON.parse(JSON.stringify(parentNode.data.subGraph.nodes)),
         initialEdges: JSON.parse(JSON.stringify(parentNode.data.subGraph.edges))
     };

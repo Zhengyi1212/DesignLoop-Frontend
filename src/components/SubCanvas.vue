@@ -499,7 +499,7 @@ async function handleSubCanvasRun() {
         console.log("[SubCanvas] No auto-generated nodes found to clear.");
     }
 
-    const url = "http://localhost:7001/generate-thinking-chain";
+    const url = "/api/generate-thinking-chain";
     const payload = {
       design_background: props.designBackground,
       design_goal: props.designGoal,

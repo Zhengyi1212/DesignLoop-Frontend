@@ -123,6 +123,7 @@ function handleApplySnapshot({ nodeId, snapshotData }) {
   targetNode.data.subGraph = newSubGraph;
   targetNode.data.title = targetNode.data.title;
   targetNode.data.content = targetNode.data.content;
+  targetNode.data.chain = dataToApply.chain
 }
 
 
@@ -134,12 +135,18 @@ function handleNodeUpdate(event) {
     node.data.content = event.data.content;
   }
 }
+// App.vue
+
 async function handleNodeRun(nodeId) {
     const node = findNode(nodeId);
     if (!node || runningNodeId.value) return;
     runningNodeId.value = nodeId;
     node.data.content = 'Running...';
-    const successors = findSuccessors(nodeId, getNodes.value, edges.value);
+    
+    // --- 关键修改在这里 ---
+    // 将 getNodes.value 修正为 nodes.value
+    const successors = findSuccessors(nodeId, nodes.value, edges.value);
+    
     try {
         const url = "/api/brainstorm";
         const payload = {
@@ -148,7 +155,10 @@ async function handleNodeRun(nodeId) {
             node_title: node.data.title,
             successors: successors,
         };
-        console.log("Su:", successors)
+        
+        // 这里的打印现在应该能正确输出后继节点的信息了
+        console.log("Passing Successors to backend:", successors);
+
         const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -167,44 +177,59 @@ async function handleNodeRun(nodeId) {
         runningNodeId.value = null;
     }
 }
+// App.vue
+
 function findSuccessors(startNodeId, allNodes, allEdges) {
-  let successors = [];
-  let directSuccessors = new Map();
+  const successors = [];
+  const queue = [];
+  // 使用一个 'visited' 集合来防止重复处理同一个节点
+  const visited = new Set([startNodeId]);
+
+  // 1. 查找所有直接previous节点并加入队列
   allEdges.forEach(edge => {
-    if (edge.source === startNodeId) {
-      if (!directSuccessors.has(edge.target)) {
-        const directNode = allNodes.find(n => n.id === edge.target);
-        if (directNode) {
-          directSuccessors.set(edge.target, { node: directNode, level: 1 });
-        }
+    if (edge.target === startNodeId) {
+      if (!visited.has(edge.source)) {
+        queue.push({ nodeId: edge.source, level: 1 });
+        // 立即标记为已访问，避免重复入队
+        visited.add(edge.source);
       }
     }
   });
-  for (let [directSuccessorId, { node, level }] of directSuccessors) {
-    let queue = [{ nodeId: directSuccessorId, level: level }];
-    let visitedInPath = new Set([startNodeId]);
-    while (queue.length > 0) {
-      const { nodeId: currentId, level: currentLevel } = queue.shift();
-      if (visitedInPath.has(currentId)) continue;
-      visitedInPath.add(currentId);
-      const currentNode = allNodes.find(n => n.id === currentId);
-      if (currentNode) {
-        const content = currentNode.data.content || '';
-        const placeholderTexts = ['Click to edit...', 'Ready to run...', ''];
-        if (content && !placeholderTexts.includes(content.trim())) {
-            successors.push({
-              level: currentLevel,
-              content: content
-            });
-        }
-        const outgoingEdges = allEdges.filter(edge => edge.source === currentId);
-        for (const edge of outgoingEdges) {
-          queue.push({ nodeId: edge.target, level: currentLevel + 1 });
+
+  // 2. 处理队列直到其为空
+  while (queue.length > 0) {
+    const { nodeId: currentId, level: currentLevel } = queue.shift();
+    const currentNode = allNodes.find(n => n.id === currentId);
+
+    if (currentNode) {
+      // 从 currentNode.data 中正确访问属性
+      const content = currentNode.data.content || '';
+      const title = currentNode.data.title || '';
+      const placeholderTexts = ['Click to edit...', 'Ready to run...', ''];
+
+      // 只有当节点内容有意义时才加入结果列表
+      if (content && !placeholderTexts.includes(content.trim())) {
+        successors.push({
+          level: currentLevel,
+          title: title, // 为后端提供更丰富的上下文
+          content: content
+        });
+      }
+
+      // 3. 查找下一层的后继节点并加入队列
+      const outgoingEdges = allEdges.filter(edge => edge.target === currentId);
+      for (const edge of outgoingEdges) {
+        //print()
+        if (!visited.has(edge.source)) {
+          visited.add(edge.source);
+          queue.push({ nodeId: edge.source, level: currentLevel + 1 });
         }
       }
     }
   }
-  return Array.from(new Map(successors.map(s => [s.content, s])).values()).sort((a, b) => a.level - b.level);
+
+  // 按层级排序后返回
+  return successors.sort((a, b) => a.level - b.level);
 }
 function placeNodeOnClick(event) {
     const isRunNode = isAddingRunNode.value;
@@ -461,8 +486,9 @@ function handleOpenSubCanvas(nodeId) {
         designBackgroud : instructionPanels.value[1].content,
         designGoal: instructionPanels.value[2].content,
         initialNodes: JSON.parse(JSON.stringify(parentNode.data.subGraph.nodes)),
-        initialEdges: JSON.parse(JSON.stringify(parentNode.data.subGraph.edges))
-    };
+        initialEdges: JSON.parse(JSON.stringify(parentNode.data.subGraph.edges)),
+        initialChainList : parentNode.data.chain
+      };
 }
 function handleCloseSubCanvas() { activeSubCanvasData.value = null; }
 function handleSubCanvasUpdate(event) {

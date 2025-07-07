@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, nextTick } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
@@ -8,9 +8,31 @@ const props = defineProps({
   data: { type: Object, required: true },
   position: { type: Object, required: true },
   selected: { type: Boolean, default: false },
+  isGeneratingRationale: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['delete', 'add-text-node']);
+const emit = defineEmits(['delete', 'add-text-node', 'update-content']);
+
+const isEditing = ref(false);
+const editableContent = ref(props.data.content);
+const textareaRef = ref(null);
+
+function startEditing() {
+  if (props.id === 'ghost-node' || props.isGeneratingRationale) return;
+  editableContent.value = props.data.content;
+  isEditing.value = true;
+  nextTick(() => {
+    textareaRef.value?.focus();
+    //textareaRef.value?.select();
+  });
+}
+
+function saveEdit() {
+  isEditing.value = false;
+  if (props.data.content !== editableContent.value) {
+    emit('update-content', { id: props.id, content: editableContent.value });
+  }
+}
 
 const nodeSelectionStyle = computed(() => {
   if (props.selected) {
@@ -36,7 +58,7 @@ function handleAddTextClick() {
 <template>
   <div
     class="chain-node"
-    :class="{ 'is-text-node': data.isTextNode }"
+    :class="{ 'is-text-node': data.isTextNode, 'is-editing': isEditing }"
     :style="[nodeSelectionStyle, data.color ? { backgroundColor: data.color } : {}]"
   >
     <NodeResizer
@@ -56,11 +78,32 @@ function handleAddTextClick() {
     </template>
 
     <div class="node-content-wrapper">
-      <div class="node-content">
-        <p class="content-display">{{ data.content || '...' }}</p>
+      <div class="node-content" @click="startEditing">
+        <p v-if="!isEditing" class="content-display">{{ data.content || 'Click to edit...' }}</p>
+        <textarea
+          v-else
+          ref="textareaRef"
+          v-model="editableContent"
+          class="content-editor"
+          @blur="saveEdit"
+          @keydown.enter.prevent="saveEdit"
+          @keydown.esc.prevent="saveEdit"
+        ></textarea>
       </div>
 
-      <button v-if="id !== 'ghost-node' && !data.isTextNode" class="action-btn" @click.stop="handleAddTextClick" title="Show Rationale">Rationale</button>
+      <div class="node-footer">
+        <button
+          v-if="id !== 'ghost-node' && !data.isTextNode"
+          class="action-btn"
+          @click.stop="handleAddTextClick"
+          :disabled="isGeneratingRationale"
+          title="Show Rationale"
+        >
+          <div v-if="isGeneratingRationale" class="spinner"></div>
+          <span v-else>Run</span>
+        </button>
+      </div>
+
       <button v-if="id !== 'ghost-node'" class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
     </div>
   </div>
@@ -92,41 +135,52 @@ function handleAddTextClick() {
     display: flex;
     flex-direction: column;
     flex-grow: 1;
+    height: 100%;
     padding: 12px;
-    justify-content: center;
 }
+
+/* --- MODIFIED AND SIMPLIFIED --- */
+/* This style now applies to ALL chain nodes, ensuring they can scroll long content. */
+/* The incorrect flex properties have been removed. */
 .node-content {
   font-size: 13px;
   color: #2c3e50;
-  overflow-y: auto;
-  cursor: default;
+  flex-grow: 1; /* Allows the content area to fill available space */
+  overflow-y: auto; /* Adds a scrollbar ONLY when content overflows */
+  min-height: 20px; /* Ensures the area has a minimum size */
+  cursor: text;
 }
+
+/* The special styling for .is-text-node is no longer needed for overflow */
+/* and has been removed to simplify the code and fix the bug. */
+
 .content-display {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+  padding: 5px;
 }
 
-/* MODIFIED: Removed .node-actions and applied shared styles directly to buttons */
-.delete-btn, .action-btn {
-  position: absolute; /* Each button is positioned independently */
+.content-editor {
+  width: 100%;
+  height: 100%;
   border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  opacity: 0; /* Buttons are invisible by default */
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  padding: 5px;
+  font-family: 'JetBrains Mono', sans-serif;
+  font-size: 13px;
+  color: #2c3e50;
+  resize: none;
+  box-sizing: border-box;
+  outline: 2px solid #6366F1;
+}
+.chain-node.is-editing {
+  cursor: default;
 }
 
-/* Buttons become visible when hovering over the node */
-.chain-node:hover .delete-btn,
-.chain-node:hover .action-btn {
-    opacity: 1;
-}
-
-/* MODIFIED: Delete button positioned top-right */
 .delete-btn {
+  position: absolute;
   top: 8px;
   right: 8px;
   background: rgba(0,0,0,0.1);
@@ -136,6 +190,13 @@ function handleAddTextClick() {
   font-size: 16px;
   color: #555;
   line-height: 1;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  opacity: 0;
+}
+.chain-node:hover .delete-btn {
+    opacity: 1;
 }
 .delete-btn:hover {
   background: #e74c3c;
@@ -143,10 +204,16 @@ function handleAddTextClick() {
   transform: scale(1.1);
 }
 
-/* UNCHANGED: Rationale button remains bottom-right */
+/* --- NEW: Added a dedicated footer for the action button --- */
+.node-footer {
+  flex-shrink: 0; /* Prevents the footer from shrinking */
+  padding-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+  height: 36px; /* Give footer a fixed height */
+}
+
 .action-btn {
-  bottom: 8px;
-  right: 8px;
   background: #e9ecef;
   color: #495057;
   border-radius: 5px;
@@ -154,15 +221,45 @@ function handleAddTextClick() {
   font-size: 12px;
   font-family: 'JetBrains Mono', sans-serif;
   font-weight: 500;
+  min-width: 80px; /* Ensure button width is consistent */
+  height: 28px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
 }
-.action-btn:hover {
+
+/* Make action button visible on hover, like the delete button */
+.chain-node:hover .action-btn {
+    opacity: 1;
+}
+.action-btn:hover:not(:disabled) {
   background: #3498db;
   color: white;
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
+.action-btn:disabled {
+  cursor: not-allowed;
+  background: #f8f9fa;
+  opacity: 0.5;
+}
 
-/* Deep styles for handles and resizer remain unchanged */
+.spinner {
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: #495057;
+  width: 14px;
+  height: 14px;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 :deep(.resizer-handle) {
   width: 8px;
   height: 8px;

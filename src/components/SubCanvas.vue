@@ -13,10 +13,8 @@ import ChainNode from './ChainNode.vue';
 
 const GHOST_NODE_OFFSET_X = -100;
 const GHOST_NODE_OFFSET_Y = -75;
-// NEW: Define vertical offset for the generated text node
 const TEXT_NODE_OFFSET_Y = -120;
 
-// ---- Props & Emits ----
 const props = defineProps({
   nodeId: { type: String, required: true },
   nodeName: { type: String, default: 'Sub-Canvas' },
@@ -28,12 +26,11 @@ const props = defineProps({
   parentNodeGoal: { type: String, default: '' },
   designBackground : { type: String, default: '' },
   designGoal : { type: String, default: '' },
+  initialChainList: { type: Array, required: true },
 });
 
-// MODIFIED: Added 'save-snapshot' to the list of emitted events.
 const emit = defineEmits(['close', 'update:graph', 'update:data', 'save-snapshot']);
 
-// ---- Local State ----
 const isEditModalVisible = ref(false);
 const editingNode = ref(null);
 const isFrozen = ref(false);
@@ -43,7 +40,7 @@ let subNodeIdCounter = 0;
 const isAddingNode = ref(false);
 const isShowingRunNode = ref(false);
 const vueFlowRef = ref(null);
-const chainList = ref(null)
+const chainList = ref(null || props.initialChainList)
 
 const instruction = ref( props.parentNodeInstruction || '');
 const goal = ref(props.parentNodeGoal || '');
@@ -51,30 +48,58 @@ const isSubCanvasRunning = ref(false);
 const isSaveButtonRunning = ref(false)
 const runningSubNodeId = ref(null);
 
-const newNodeColor = ref('#34495e');
+const newNodeColor = ref('#ffffff');
+
+const isGeneratingRationaleNodeId = ref(null);
 
 const subflow = useVueFlow({ id: props.nodeId });
 
-// ---- Logic (Mostly Unchanged) ----
+function handleChainNodeContentUpdate({ id, content }) {
+  const node = subflow.findNode(id);
+  if (node) {
+    node.data.content = content;
+    console.log(`Node ${id} content updated.`);
+  }
+}
 
+// [REVISED] A more robust implementation for filtering out text nodes before saving.
 async function handleSaveButton() {
   if (isSaveButtonRunning.value) return;
   isSaveButtonRunning.value = true;
 
   try {
+    const allNodes = subflow.getNodes.value;
+    const allEdges = subflow.getEdges.value;
+
+    // 1. Identify text nodes by their unique ID prefix, which is more reliable.
+    const textNodeIds = new Set(
+      allNodes
+        .filter(n => n.id.startsWith('sub-text-node-'))
+        .map(n => n.id)
+    );
+
+    // 2. Filter nodes to exclude text nodes and the ghost node.
+    const nodesForSnapshot = allNodes.filter(n =>
+      n.id !== 'ghost-node' && !textNodeIds.has(n.id)
+    );
+
+    // 3. Filter edges to exclude any that connect to a text node.
+    const edgesForSnapshot = allEdges.filter(e =>
+      !textNodeIds.has(e.source) && !textNodeIds.has(e.target)
+    );
+
     const snapshotPayload = {
       title: `Version of: ${goal.value || 'Untitled'}`,
       data: {
         instruction: instruction.value,
         goal: goal.value,
+        chain : chainList.value,
         subGraph: {
-          // MODIFIED: Filter out the temporary 'ghost-node' before saving.
-          nodes: JSON.parse(JSON.stringify(subflow.getNodes.value.filter(n => n.id !== 'ghost-node'))),
-          edges: JSON.parse(JSON.stringify(subflow.getEdges.value)),
+          nodes: JSON.parse(JSON.stringify(nodesForSnapshot)),
+          edges: JSON.parse(JSON.stringify(edgesForSnapshot)),
         }
       }
     };
-    // Emit the 'save-snapshot' event to be caught by App.vue
     emit('save-snapshot', snapshotPayload);
     console.log('Sub-canvas state snapshot emitted successfully!');
   } catch (error) {
@@ -84,24 +109,25 @@ async function handleSaveButton() {
   }
 }
 
-// ... (All other functions from your original file remain here, unchanged)
 function placeNodeOnClick(event) {
-  if (!isAddingNode.value || event.target.closest('.vue-flow__controls')) {
+  if (!isAddingNode.value || event.target.closest('.vue-flow__controls, .tool-button')) {
     return;
   }
   const ghostNode = subflow.findNode('ghost-node');
   if (!ghostNode) return;
 
   const newNode = {
-    id: `sub-node-${props.nodeId}-${subNodeIdCounter++}`,
-    type: 'custom',
+    id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter++}`,
+    type: 'chain',
     position: { ...ghostNode.position },
+    width: 200,
+    height: 100,
     data: {
-      title: 'New Sub-Node',
-      content: 'This is a node in a sub-canvas',
+      content: '',
       color: newNodeColor.value,
       connections: { in: [], out: [] },
       subGraph: { nodes: [], edges: [] },
+      isManual: true, 
     },
   };
   subflow.addNodes([newNode]);
@@ -130,8 +156,8 @@ subflow.onPaneMouseMove((event) => {
   };
   const position = subflow.project(relativeMousePos);
   const adjustedPosition = {
-    x: position.x + GHOST_NODE_OFFSET_X,
-    y: position.y + GHOST_NODE_OFFSET_Y,
+    x: position.x - 100,
+    y: position.y - 50,
   };
   const ghostNode = subflow.findNode('ghost-node');
   if (ghostNode) {
@@ -140,10 +166,11 @@ subflow.onPaneMouseMove((event) => {
   } else {
     subflow.addNodes([{
       id: 'ghost-node',
-      type: 'custom',
+      type: 'chain',
       position: adjustedPosition,
+      width: 200,
+      height: 100,
       data: {
-        title: 'New Node',
         content: 'Click to place',
         color: newNodeColor.value
       },
@@ -236,7 +263,18 @@ function onFieldBlur() {
 }
 
 function generateNodeChain(nodeDataList) {
-  if (!Array.isArray(nodeDataList) || nodeDataList.length === 0) return;
+  if (!subflow) {
+    console.error("[SubCanvas] Vue Flow instance (subflow) is not available!");
+    return;
+  }
+
+  if (!Array.isArray(nodeDataList) || nodeDataList.length === 0) {
+    console.log("[SubCanvas] nodeDataList is empty, skipping new chain generation.");
+    return;
+  }
+  
+  console.log("[SubCanvas] Generating new chain with data:", nodeDataList);
+
   const newNodes = [];
   const newEdges = [];
   const startX = 100;
@@ -244,20 +282,15 @@ function generateNodeChain(nodeDataList) {
   const gapX = 250;
 
   nodeDataList.forEach((element, index) => {
-    // Extract the value from the 'step_summary' key for the node's content.
-    const content = element.step_summary || '';
-
+    const content = element || '';
     const newNode = {
       id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter++}`,
       type: 'chain',
       position: { x: startX + index * gapX, y: startY },
-      width: 200,
-      height: 100,
+      style: { width: '200px', height: '100px' },
       data: {
         content: content,
         connections: { in: [], out: [] },
-        subGraph: { nodes: [], edges: [] },
-        detailed_explanation: element.detailed_explanation
       },
     };
     newNodes.push(newNode);
@@ -278,60 +311,156 @@ function generateNodeChain(nodeDataList) {
     };
     newEdges.push(newEdge);
   }
+  
+  console.log("[SubCanvas] Adding new nodes:", newNodes);
+  console.log("[SubCanvas] Adding new edges:", newEdges);
+
   subflow.addNodes(newNodes);
   subflow.addEdges(newEdges);
 }
 
-function handleGenerateTextNode({ sourceNodeId, position }) {
-    const sourceNode = subflow.findNode(sourceNodeId);
-    if (!sourceNode) return;
+/**
+ * NEW FUNCTION: Finds the chain of predecessor nodes for a given start node.
+ * This function is adapted from the `findSuccessors` method in App.vue.
+ * It traverses the graph backwards from the startNodeId, collecting all parent nodes.
+ * It specifically ignores nodes marked as text nodes (data.isTextNode === true).
+ *
+ * @param {string} startNodeId - The ID of the node to start the search from.
+ * @param {Array} allNodes - The complete list of nodes in the sub-canvas.
+ * @param {Array} allEdges - The complete list of edges in the sub-canvas.
+ * @returns {Array} - A sorted list of predecessor nodes, each with a level and content.
+ */
+function findChainNodePredecessors(startNodeId, allNodes, allEdges) {
+  const predecessors = [];
+  const queue = [];
+  const visited = new Set([startNodeId]);
 
-    // --- NEW: Prevent creating a duplicate content node ---
-    if (sourceNode.data.generatedContentNodeId && subflow.findNode(sourceNode.data.generatedContentNodeId)) {
-        console.log("Content node already exists.");
-        return; // Exit if the content node has already been created
+  // 1. Find all direct predecessors of the start node and add them to the queue.
+  allEdges.forEach(edge => {
+    if (edge.target === startNodeId) {
+      const sourceNode = allNodes.find(n => n.id === edge.source);
+      // Only process chain nodes, not text nodes.
+      if (sourceNode && !sourceNode.data.isTextNode) {
+        if (!visited.has(edge.source)) {
+          queue.push({ nodeId: edge.source, level: 1 });
+          visited.add(edge.source);
+        }
+      }
     }
-    // ---
+  });
 
-    const contentNode = {
-        id: `sub-text-node-${props.nodeId}-${subNodeIdCounter++}`,
-        type: 'chain',
-        position: {
-            x: position.x - 50, // Center the larger node over the smaller one
-            y: position.y + TEXT_NODE_OFFSET_Y - 50, // Adjust vertical position further
-        },
-        // Make the new node larger
-        width: 300,
-        height: 160,
-        data: {
-            // Use the stored fullContent
-            content: sourceNode.data.detailed_explanation,
-            isTextNode: true, // Flag for different styling
-            connections: { in: [], out: [] },
-            subGraph: { nodes: [], edges: [] },
-        },
-    };
+  // 2. Process the queue using Breadth-First Search (BFS).
+  while (queue.length > 0) {
+    const { nodeId: currentId, level: currentLevel } = queue.shift();
+    const currentNode = allNodes.find(n => n.id === currentId);
 
-    // --- NEW: Create an edge to link the new node to its source ---
-    const newEdge = {
-        id: `sub-content-edge-${contentNode.id}-to-${sourceNode.id}`,
-        // Note: The edge goes FROM the new content node TO the original summary node
-        source: contentNode.id,
-        target: sourceNode.id,
-        sourceHandle: 'bottom', // From the bottom of the new content node
-        targetHandle: 'top',   // To the top of the original summary node
-        type: 'custom',
-        animated: true,
-    };
-    // ---
+    if (currentNode && !currentNode.data.isTextNode) {
+      const content = currentNode.data.content || '';
+      const placeholderTexts = [''];
 
-    // Update the source node to track its content node
-    sourceNode.data.generatedContentNodeId = contentNode.id;
+      // Only add nodes with meaningful content to the result list.
+      if (content && !placeholderTexts.includes(content.trim())) {
+        predecessors.push({
+          level: currentLevel,
+          content: content
+        });
+      }
 
-    // Add the new node and the new edge to the canvas
-    subflow.addNodes([contentNode]);
-    subflow.addEdges([newEdge]);
+      // 3. Find the next level of predecessors and add them to the queue.
+      const incomingEdges = allEdges.filter(edge => edge.target === currentId);
+      for (const edge of incomingEdges) {
+         const sourceNode = allNodes.find(n => n.id === edge.source);
+         if (sourceNode && !sourceNode.data.isTextNode) {
+            if (!visited.has(edge.source)) {
+                visited.add(edge.source);
+                queue.push({ nodeId: edge.source, level: currentLevel + 1 });
+            }
+         }
+      }
+    }
+  }
+
+  // Return the predecessors, sorted by their level (distance from the start node).
+  return predecessors.sort((a, b) => a.level - b.level);
 }
+
+
+async function handleGenerateTextNode({ sourceNodeId, position }) {
+    const sourceNode = subflow.findNode(sourceNodeId);
+    if (!sourceNode || isGeneratingRationaleNodeId.value) return;
+
+    isGeneratingRationaleNodeId.value = sourceNodeId;
+    try {
+        // --- MODIFICATION: Find predecessors before calling the backend ---
+        const predecessors = findChainNodePredecessors(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value);
+        console.log(`[SubCanvas] Found ${predecessors.length} predecessors for node ${sourceNodeId}:`, predecessors);
+        const formattedChain = (chainList.value || []).map(item => ({ content: item }));
+        const payload = {
+            parent_node_title: props.parentNodeTitle,
+            parent_node_content: props.parentNodeContent,
+            goal: goal.value,
+            instruction: instruction.value,
+            current_node_content: sourceNode.data.content,
+            chain: formattedChain, // This is the chain generated by the main "Run" button
+            predecessor_chain: predecessors, // --- MODIFICATION: Pass the specific predecessor chain to the backend ---
+            design_background: props.designBackground,
+            design_goal:props.designGoal
+        };
+
+        const response = await fetch('/api/generate-rationale', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch rationale or parse error response.' }));
+            const readableError = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail, null, 2);
+            throw new Error(readableError);
+        }
+        const data = await response.json();
+        const rationaleContent = data.rationale || 'No rationale provided.';
+
+        const existingTextNodeId = sourceNode.data.generatedContentNodeId;
+        const existingTextNode = existingTextNodeId ? subflow.findNode(existingTextNodeId) : null;
+
+        if (existingTextNode) {
+            existingTextNode.data.content = rationaleContent;
+        } else {
+            const contentNode = {
+                id: `sub-text-node-${props.nodeId}-${subNodeIdCounter++}`,
+                type: 'chain',
+                position: { x: position.x - 50, y: position.y + TEXT_NODE_OFFSET_Y - 50, },
+                width: 300,
+                height: 160,
+                data: {
+                    content: rationaleContent,
+                    isTextNode: true,
+                    connections: { in: [], out: [] },
+                    subGraph: { nodes: [], edges: [] },
+                },
+            };
+            const newEdge = {
+                id: `sub-content-edge-${contentNode.id}-to-${sourceNode.id}`,
+                source: contentNode.id,
+                target: sourceNode.id,
+                sourceHandle: 'bottom',
+                targetHandle: 'top',
+                type: 'custom',
+                animated: true,
+            };
+            sourceNode.data.generatedContentNodeId = contentNode.id;
+            subflow.addNodes([contentNode]);
+            subflow.addEdges([newEdge]);
+        }
+    } catch (error) {
+        console.error("Error generating rationale:", error);
+        alert(`Failed to generate rationale: ${error.message}`);
+    } finally {
+        isGeneratingRationaleNodeId.value = null;
+    }
+}
+
 
 async function handleSubCanvasRun() {
   if (isSubCanvasRunning.value) return;
@@ -343,24 +472,39 @@ async function handleSubCanvasRun() {
 
     if (!userInstruction || !userGoal) {
       alert("Please provide both an instruction and a goal for the exploration.");
-      return; // Stop the execution
+      isSubCanvasRunning.value = false;
+      return;
     }
 
-    // --- NEW: Logic to remove previously generated chain nodes and text nodes ---
-    const nodesToRemove = subflow.getNodes.value.filter(n => 
-        n.id.startsWith('sub-chain-node-') || n.id.startsWith('sub-text-node-')
+    console.log("[SubCanvas] Clearing previously generated nodes and edges.");
+    const allNodes = subflow.getNodes.value;
+    const allEdges = subflow.getEdges.value;
+
+    const nodesToRemove = allNodes.filter(n =>
+      n.type === 'chain' && (!n.data.isManual || n.data.isTextNode)
     );
-    if (nodesToRemove.length > 0) {
-        subflow.removeNodes(nodesToRemove.map(n => n.id));
-    }
-    // --- End of new logic ---
 
-    const url = "/api/generate-thinking-chain";
+    if (nodesToRemove.length > 0) {
+        const nodeIdsToRemove = nodesToRemove.map(n => n.id);
+        const edgesToRemove = allEdges.filter(e => nodeIdsToRemove.includes(e.source) || nodeIdsToRemove.includes(e.target));
+        
+        console.log("[SubCanvas] Removing edge IDs:", edgesToRemove.map(e => e.id));
+        console.log("[SubCanvas] Removing node IDs:", nodeIdsToRemove);
+        
+        if (edgesToRemove.length > 0) {
+          subflow.removeEdges(edgesToRemove.map(e => e.id));
+        }
+        subflow.removeNodes(nodeIdsToRemove);
+    } else {
+        console.log("[SubCanvas] No auto-generated nodes found to clear.");
+    }
+
+    const url = "http://localhost:7001/generate-thinking-chain";
     const payload = {
       design_background: props.designBackground,
       design_goal: props.designGoal,
-      node_title: props.parentNodeTitle,
-      node_content: props.parentNodeContent,
+      parent_node_content: props.parentNodeContent,
+      parent_node_title : props.parentNodeTitle,
       instruction: userInstruction,
       goal: userGoal,
     };
@@ -377,8 +521,10 @@ async function handleSubCanvasRun() {
     }
 
     const data = await response.json();
-    chainList.value = data;
-    generateNodeChain(data);
+    
+    chainList.value = data.chain;
+    console.log("chainList:", chainList)
+    generateNodeChain(data.chain);
 
   } catch (error) {
     console.error("Error during sub-canvas run:", error);
@@ -470,6 +616,8 @@ onUnmounted(() => {
               v-bind="chainProps"
               @delete="subflow.removeNodes([$event])"
               @add-text-node="handleGenerateTextNode"
+              @update-content="handleChainNodeContentUpdate"
+              :is-generating-rationale="isGeneratingRationaleNodeId === chainProps.id"
             />
           </template>
 
@@ -592,23 +740,25 @@ onUnmounted(() => {
   align-items: center;
   padding: 0 20px;
 }
-.save-btn {
+.save-btn, .run-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   padding: 8px 16px;
-  border: 1px solid #007bff;
-  background-color: #007bff;
-  color: white;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: 'JetBrains Mono', monospace;
   font-size: 14px;
+  height: 40px;
+}
+.save-btn {
+  border: 1px solid #007bff;
+  background-color: #007bff;
+  color: white;
   font-weight: 500;
   min-width: 120px;
-  height: 40px;
 }
 .save-btn:hover:not(:disabled) {
   background-color: #0056b3;
@@ -620,21 +770,10 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 .run-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 16px;
   border: 1px solid #28a745;
   background-color: #28a745;
   color: white;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
   min-width: 80px;
-  height: 40px;
 }
 .run-btn:hover:not(:disabled) {
   background-color: #218838;

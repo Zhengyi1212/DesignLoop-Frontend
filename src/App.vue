@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onBeforeUnmount, defineAsyncComponent, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onBeforeUnmount, defineAsyncComponent, onMounted, onUnmounted, computed, watch } from 'vue';
 import { VueFlow, useVueFlow, applyEdgeChanges } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
@@ -37,10 +37,110 @@ const runningNodeId = ref(null);
 const vueFlowRef = ref(null);
 const snapshots = ref([]);
 
-// --- NEW: Right Panel Resizing and Collapsing Logic ---
+// --- NEW: Session Management State ---
+const isSessionExpired = ref(false);
+const SESSION_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
 
-const DEFAULT_PANEL_WIDTH = 200; // 默认宽度
-const MIN_PANEL_WIDTH = 40; // 面板被视为“折叠”的最小宽度
+// --- NEW: SessionStorage & Session Management Functions ---
+
+/**
+ * Saves the entire application state to sessionStorage.
+ */
+function saveState() {
+  try {
+    const state = {
+      nodes: nodes.value,
+      edges: edges.value,
+      instructionPanels: instructionPanels.value,
+      snapshots: snapshots.value,
+      nodeIdCounter: nodeIdCounter,
+      snapshotIdCounter: snapshotIdCounter,
+    };
+    sessionStorage.setItem('appState', JSON.stringify(state));
+    sessionStorage.setItem('sessionTimestamp', new Date().getTime().toString());
+  } catch (e) {
+    console.error("Failed to save state to sessionStorage:", e);
+  }
+}
+
+/**
+ * Loads the application state from sessionStorage.
+ */
+function loadState() {
+  const savedState = sessionStorage.getItem('appState');
+  if (savedState) {
+    try {
+      const state = JSON.parse(savedState);
+      nodes.value = state.nodes || [];
+      edges.value = state.edges || [];
+      instructionPanels.value = state.instructionPanels || instructionPanels.value;
+      snapshots.value = state.snapshots || [];
+      nodeIdCounter = state.nodeIdCounter || 0;
+      snapshotIdCounter = state.snapshotIdCounter || 0;
+      console.log("Application state loaded from sessionStorage.");
+    } catch (e) {
+      console.error("Failed to parse state from sessionStorage:", e);
+      sessionStorage.removeItem('appState'); // Clear corrupted data
+    }
+  }
+}
+
+/**
+ * Checks the session timestamp. If it's expired, it clears the state
+ * and shows an expiration overlay. Otherwise, it loads the state.
+ */
+function manageSession() {
+  const lastActivity = sessionStorage.getItem('sessionTimestamp');
+  if (lastActivity) {
+    const now = new Date().getTime();
+    if (now - parseInt(lastActivity, 10) > SESSION_DURATION) {
+      // Session has expired
+      isSessionExpired.value = true;
+      sessionStorage.removeItem('appState');
+      sessionStorage.removeItem('sessionTimestamp');
+      console.warn("Session expired. State has been cleared.");
+    } else {
+      // Session is active, load the state
+      loadState();
+    }
+  }
+}
+
+/**
+ * Clears all application state, removes data from sessionStorage, and reloads the page.
+ */
+function clearAllStateAndExit() {
+  // Clear all reactive state
+  nodes.value = [];
+  edges.value = [];
+  instructionPanels.value.forEach(panel => panel.content = '');
+  snapshots.value = [];
+  
+  // Clear counters
+  nodeIdCounter = 0;
+  snapshotIdCounter = 0;
+
+  // Clear sessionStorage and reload for a completely fresh start
+  sessionStorage.clear();
+  location.reload();
+}
+
+/**
+ * Starts a new session by reloading the page. The onMounted hook will handle creating a new session.
+ */
+function startNewSession() {
+    isSessionExpired.value = false;
+    location.reload();
+}
+
+// Watch for any changes in the state and save them to sessionStorage
+watch([nodes, edges, instructionPanels, snapshots], saveState, { deep: true });
+
+
+// --- Right Panel Resizing and Collapsing Logic (Unchanged) ---
+
+const DEFAULT_PANEL_WIDTH = 200;
+const MIN_PANEL_WIDTH = 40; 
 
 const rightPanelWidth = ref(DEFAULT_PANEL_WIDTH);
 const isResizing = ref(false);
@@ -48,11 +148,9 @@ const isResizing = ref(false);
 
 const isRightPanelCollapsed = computed(() => rightPanelWidth.value <= MIN_PANEL_WIDTH);
 
-// drag --> snpt window
 function startResize(event) {
   event.preventDefault();
   isResizing.value = true;
-  // 在 window 上添加事件监听器，以便在页面任何地方拖动
   window.addEventListener('mousemove', doResize);
   window.addEventListener('mouseup', stopResize);
 }
@@ -60,26 +158,21 @@ function startResize(event) {
 
 function doResize(event) {
   if (!isResizing.value) return;
-  // 根据鼠标位置计算新的面板宽度
   const newWidth = window.innerWidth - event.clientX;
-  // 限制最大和最小宽度
   if (newWidth > MIN_PANEL_WIDTH && newWidth < 600) {
     rightPanelWidth.value = newWidth;
   }
 }
 
-// 停止拖拽的函数
 function stopResize() {
   isResizing.value = false;
   window.removeEventListener('mousemove', doResize);
   window.removeEventListener('mouseup', stopResize);
-  // 如果宽度小于最小阈值，则自动折叠
   if (rightPanelWidth.value < MIN_PANEL_WIDTH) {
     rightPanelWidth.value = 0;
   }
 }
 
-// 切换面板展开/折叠状态的函数
 function toggleRightPanel() {
   if (isRightPanelCollapsed.value) {
    
@@ -89,12 +182,6 @@ function toggleRightPanel() {
     rightPanelWidth.value = 0;
   }
 }
-
-onUnmounted(() => {
-  window.removeEventListener('mousemove', doResize);
-  window.removeEventListener('mouseup', stopResize);
-});
-
 
 // --- Snapshot Handling Logic (Unchanged) ---
 
@@ -135,7 +222,6 @@ function handleNodeUpdate(event) {
     node.data.content = event.data.content;
   }
 }
-// App.vue
 
 async function handleNodeRun(nodeId) {
     const node = findNode(nodeId);
@@ -143,8 +229,6 @@ async function handleNodeRun(nodeId) {
     runningNodeId.value = nodeId;
     node.data.content = 'Running...';
     
-    // --- 关键修改在这里 ---
-    // 将 getNodes.value 修正为 nodes.value
     const successors = findSuccessors(nodeId, nodes.value, edges.value);
     
     try {
@@ -156,7 +240,6 @@ async function handleNodeRun(nodeId) {
             successors: successors,
         };
         
-        // 这里的打印现在应该能正确输出后继节点的信息了
         console.log("Passing Successors to backend:", successors);
 
         const response = await fetch(url, {
@@ -177,49 +260,40 @@ async function handleNodeRun(nodeId) {
         runningNodeId.value = null;
     }
 }
-// App.vue
 
 function findSuccessors(startNodeId, allNodes, allEdges) {
   const successors = [];
   const queue = [];
-  // 使用一个 'visited' 集合来防止重复处理同一个节点
   const visited = new Set([startNodeId]);
 
-  // 1. 查找所有直接previous节点并加入队列
   allEdges.forEach(edge => {
     if (edge.target === startNodeId) {
       if (!visited.has(edge.source)) {
         queue.push({ nodeId: edge.source, level: 1 });
-        // 立即标记为已访问，避免重复入队
         visited.add(edge.source);
       }
     }
   });
 
-  // 2. 处理队列直到其为空
   while (queue.length > 0) {
     const { nodeId: currentId, level: currentLevel } = queue.shift();
     const currentNode = allNodes.find(n => n.id === currentId);
 
     if (currentNode) {
-      // 从 currentNode.data 中正确访问属性
       const content = currentNode.data.content || '';
       const title = currentNode.data.title || '';
       const placeholderTexts = ['Click to edit...', 'Ready to run...', ''];
 
-      // 只有当节点内容有意义时才加入结果列表
       if (content && !placeholderTexts.includes(content.trim())) {
         successors.push({
           level: currentLevel,
-          title: title, // 为后端提供更丰富的上下文
+          title: title,
           content: content
         });
       }
 
-      // 3. 查找下一层的后继节点并加入队列
       const outgoingEdges = allEdges.filter(edge => edge.target === currentId);
       for (const edge of outgoingEdges) {
-        //print()
         if (!visited.has(edge.source)) {
           visited.add(edge.source);
           queue.push({ nodeId: edge.source, level: currentLevel + 1 });
@@ -228,7 +302,6 @@ function findSuccessors(startNodeId, allNodes, allEdges) {
     }
   }
 
-  // 按层级排序后返回
   return successors.sort((a, b) => a.level - b.level);
 }
 function placeNodeOnClick(event) {
@@ -326,8 +399,18 @@ function handleKeyDown(event) {
     handleDuplicateNode();
   }
 }
-onMounted(() => { window.addEventListener('keydown', handleKeyDown); });
-onUnmounted(() => { window.removeEventListener('keydown', handleKeyDown); });
+
+// --- MODIFIED: onMounted Lifecycle Hook ---
+onMounted(() => { 
+  manageSession(); // Manage session and load state on initial load
+  window.addEventListener('keydown', handleKeyDown); 
+});
+
+onUnmounted(() => { 
+  window.removeEventListener('keydown', handleKeyDown); 
+  window.removeEventListener('mousemove', doResize);
+  window.removeEventListener('mouseup', stopResize);
+});
 onBeforeUnmount(() => {
   const flowElement = vueFlowRef.value?.$el;
   if (flowElement) {
@@ -404,10 +487,8 @@ async function handleFetchPipeline() {
     console.log("Received raw pipeline data:", data.pipeline);
 
     if (Array.isArray(data.pipeline)) {
-      // 2. Join the array elements with a newline character ('\n')
       instructionPanels.value[3].content = data.pipeline.join('\n');
     } else {
-      // Fallback for safety, in case the data is not an array
       instructionPanels.value[3].content = String(data.pipeline);
     }
 
@@ -522,19 +603,22 @@ function toggleFreeze() {
 <template>
   <div class="app-container" :class="{ 'is-resizing': isResizing }">
     <!-- Left Panel -->
-    
-      <InstructionPanel
-        :panels="instructionPanels"
-        :is-generating="isGenerating"
-        :is-fetching-pipeline="isFetchingPipeline"
-        @update-panel-content="(event) => instructionPanels[event.index].content = event.content"
-        @generate="handleGeneration"
-        @fetch-pipeline="handleFetchPipeline"
-      />
-   
+    <InstructionPanel
+      :panels="instructionPanels"
+      :is-generating="isGenerating"
+      :is-fetching-pipeline="isFetchingPipeline"
+      @update-panel-content="(event) => instructionPanels[event.index].content = event.content"
+      @generate="handleGeneration"
+      @fetch-pipeline="handleFetchPipeline"
+    />
 
     <!-- Main Content Area -->
     <main class="main-content">
+      <!-- NEW: Exit Button -->
+      <button @click="clearAllStateAndExit" class="exit-button" title="清除所有内容并退出">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+
       <VueFlow
         v-model:nodes="nodes"
         v-model:edges="edges"
@@ -623,6 +707,15 @@ function toggleFreeze() {
 
       <CanvasNodePanel v-if="!isRightPanelCollapsed" :snapshots="snapshots" />
     </div>
+
+    <!-- NEW: Session Expiration Overlay -->
+    <div v-if="isSessionExpired" class="session-expired-overlay">
+      <div class="session-expired-box">
+        <h2>会话已过期</h2>
+        <p>您的会话已超过10分钟，为保护数据安全，当前会话已结束。</p>
+        <button @click="startNewSession" class="restart-button">开始新会话</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -645,7 +738,6 @@ body, html {
   font-family: 'JetBrains Mono', 'Helvetica Neue', Arial, sans-serif;
   background-color: var(--app-bg);
   overflow: hidden;
-  /* 阻止在拖拽时选中文本 */
   user-select: none;
 }
 .app-container.is-resizing {
@@ -687,10 +779,8 @@ body, html {
 }
 .main-toolbar-wrapper {
   position: absolute;
-  bottom: 0px;
-  left: 49.5%;
-  border-radius: 25px;
-  width: 700px;
+  bottom: 20px;
+  left: 50%;
   transform: translateX(-50%);
   z-index: 10;
 }
@@ -711,7 +801,7 @@ body, html {
   transition: width 0.2s ease-in-out;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* 隐藏面板内部溢出的内容 */
+  overflow: hidden;
 }
 .right-panel.is-collapsed {
   border-left: 1px solid transparent;
@@ -754,5 +844,79 @@ body, html {
 .expand-btn:hover {
   transform: translate(-50%, -50%) scale(1.1);
   box-shadow: 0 6px 16px rgba(0, 123, 255, 0.5);
+}
+
+/* --- NEW STYLES for Exit Button and Session Overlay --- */
+.exit-button {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 20; /* Ensure it's above controls but below sub-canvas */
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #343a40;
+  transition: all 0.3s ease-in-out;
+}
+.exit-button:hover {
+  background-color: #e74c3c;
+  color: white;
+  border-color: #e74c3c;
+  transform: rotate(90deg) scale(1.1);
+}
+
+.session-expired-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(5px);
+}
+.session-expired-box {
+  background-color: white;
+  padding: 30px 40px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  max-width: 420px;
+  border: 1px solid #ddd;
+}
+.session-expired-box h2 {
+  margin-top: 0;
+  color: #c0392b;
+  font-size: 24px;
+}
+.session-expired-box p {
+  margin-bottom: 30px;
+  color: #34495e;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.restart-button {
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s;
+}
+.restart-button:hover {
+  background-color: #2ecc71;
+  transform: translateY(-2px);
 }
 </style>

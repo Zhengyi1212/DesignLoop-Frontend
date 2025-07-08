@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onBeforeUnmount, defineAsyncComponent, onMounted, onUnmounted, computed, watch } from 'vue';
+import { ref, onBeforeUnmount, defineAsyncComponent, onMounted, onUnmounted, computed, watch,nextTick } from 'vue';
 import { VueFlow, useVueFlow, applyEdgeChanges } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
@@ -41,15 +41,15 @@ const snapshots = ref([]);
 const isSessionExpired = ref(false);
 const SESSION_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
 
-// --- NEW: SessionStorage & Session Management Functions ---
+// In App.vue
 
-/**
- * Saves the entire application state to sessionStorage.
- */
 function saveState() {
   try {
+    // 必须保留这个过滤器，以防止在 nextTick 执行前，幽灵节点被保存
+    const nodesToSave = nodes.value.filter(node => node.id !== 'ghost-node');
+
     const state = {
-      nodes: nodes.value,
+      nodes: nodesToSave,
       edges: edges.value,
       instructionPanels: instructionPanels.value,
       snapshots: snapshots.value,
@@ -62,7 +62,6 @@ function saveState() {
     console.error("Failed to save state to sessionStorage:", e);
   }
 }
-
 /**
  * Loads the application state from sessionStorage.
  */
@@ -106,9 +105,6 @@ function manageSession() {
   }
 }
 
-/**
- * Clears all application state, removes data from sessionStorage, and reloads the page.
- */
 function clearAllStateAndExit() {
   // Clear all reactive state
   nodes.value = [];
@@ -125,9 +121,7 @@ function clearAllStateAndExit() {
   location.reload();
 }
 
-/**
- * Starts a new session by reloading the page. The onMounted hook will handle creating a new session.
- */
+
 function startNewSession() {
     isSessionExpired.value = false;
     location.reload();
@@ -203,7 +197,9 @@ function handleApplySnapshot({ nodeId, snapshotData }) {
     return;
   }
   const dataToApply = snapshotData.data;
+  console.log(dataToApply.id)
   console.log(snapshotData.data.goal)
+  targetNode.data.appliedSnapshotId = snapshotData.id
   const newSubGraph = JSON.parse(JSON.stringify(dataToApply.subGraph));
   targetNode.data.instruction = dataToApply.instruction;
   targetNode.data.goal = dataToApply.goal;
@@ -229,7 +225,7 @@ async function handleNodeRun(nodeId) {
     runningNodeId.value = nodeId;
     node.data.content = 'Running...';
     
-    const successors = findSuccessors(nodeId, nodes.value, edges.value);
+    const successors = findPredecessors(nodeId, nodes.value, edges.value);
     
     try {
         const url = "/api/brainstorm";
@@ -261,7 +257,7 @@ async function handleNodeRun(nodeId) {
     }
 }
 
-function findSuccessors(startNodeId, allNodes, allEdges) {
+function findPredecessors(startNodeId, allNodes, allEdges) {
   const successors = [];
   const queue = [];
   const visited = new Set([startNodeId]);
@@ -304,33 +300,46 @@ function findSuccessors(startNodeId, allNodes, allEdges) {
 
   return successors.sort((a, b) => a.level - b.level);
 }
+// 在 App.vue 的 <script setup> 区域，确保 nextTick 已经被引入
+// import { ref, onBeforeUnmount, ..., nextTick } from 'vue';
+
 function placeNodeOnClick(event) {
     const isRunNode = isAddingRunNode.value;
-  if ((!isAddingNode.value && !isRunNode) || event.target.closest('.vue-flow__controls')) {
-    return;
-  }
-  const ghostNode = findNode('ghost-node');
-  if (!ghostNode) return;
-  const newNode = {
-    id: `node-${nodeIdCounter++}`,
-    type: isRunNode ? 'run' : 'custom',
-    position: { ...ghostNode.position },
-    data: {
-      title: isRunNode ? 'Run Node' : 'New Node',
-      content: isRunNode ? 'Ready to run...' : 'Click to edit...',
-      instruction: '',
-      goal: '',
-      color: isRunNode ? '#f1c40f' : newNodeColor.value,
-      connections: { in: [], out: [] },
-      subGraph: { nodes: [], edges: [] },
-    },
-  };
-  addNodes([newNode]);
-  if (isRunNode) {
-      toggleAddRunNodeMode();
-  } else {
-      toggleAddNodeMode();
-  }
+    if ((!isAddingNode.value && !isRunNode) || event.target.closest('.vue-flow__controls')) {
+        return;
+    }
+    const ghostNode = findNode('ghost-node');
+    if (!ghostNode) return;
+
+    // 1. 准备新节点的数据
+    const newNode = {
+        id: `node-${nodeIdCounter++}`,
+        type: isRunNode ? 'run' : 'custom',
+        position: { ...ghostNode.position },
+        data: {
+            title: isRunNode ? '' : '',
+            content: isRunNode ? '' : '',
+            instruction: '',
+            goal: '',
+            color: isRunNode ? '#f1c40f' : newNodeColor.value,
+            connections: { in: [], out: [] },
+            subGraph: { nodes: [], edges: [] },
+        },
+    };
+
+    // 2. 使用库的函数添加新节点
+    addNodes([newNode]);
+
+    // 3. 使用 nextTick 来延迟执行清理工作
+    // 这可以确保在执行后续操作之前，Vue 已经完成了添加新节点的状态更新
+    nextTick(() => {
+        // 现在可以安全地退出“添加模式”，这会自动移除幽灵节点
+        if (isRunNode) {
+            toggleAddRunNodeMode();
+        } else {
+            toggleAddNodeMode();
+        }
+    });
 }
 function toggleAddNodeMode() {
   if (isAddingRunNode.value) isAddingRunNode.value = false;
@@ -598,6 +607,14 @@ function toggleFreeze() {
     }
   }
 }
+
+function handleDeleteSnapshot(snapshotIdToDelete) {
+  const index = snapshots.value.findIndex(s => s.id === snapshotIdToDelete);
+  if (index !== -1) {
+    snapshots.value.splice(index, 1);
+    console.log(`Snapshot with ID: ${snapshotIdToDelete} has been deleted.`);
+  }
+}
 </script>
 
 <template>
@@ -629,7 +646,8 @@ function toggleFreeze() {
         :fit-view-on-init="true"
         :delete-key-code="'Backspace'"
         ref="vueFlowRef"
-      >
+        :min-zoom="0.1"
+      > 
         <defs>
           <marker id="custom-arrow" viewBox="-10 -10 20 20" refX="0" refY="0" markerWidth="16" markerHeight="16" orient="auto-start-reverse">
             <path d="M -8 -6 L 8 0 L -8 6 Z" fill="#b1b1b7" />
@@ -690,6 +708,7 @@ function toggleFreeze() {
         @close="handleCloseSubCanvas"
         @update:graph="handleSubCanvasUpdate"
         @update:data="handleSubCanvasDataUpdate"
+        :min-zoom="0.2"
       />
     </main>
 
@@ -705,15 +724,17 @@ function toggleFreeze() {
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </button>
 
-      <CanvasNodePanel v-if="!isRightPanelCollapsed" :snapshots="snapshots" />
+      <CanvasNodePanel v-if="!isRightPanelCollapsed" 
+      :snapshots="snapshots" 
+       @delete-snapshot="handleDeleteSnapshot"/>
     </div>
 
     <!-- NEW: Session Expiration Overlay -->
     <div v-if="isSessionExpired" class="session-expired-overlay">
       <div class="session-expired-box">
-        <h2>会话已过期</h2>
-        <p>您的会话已超过10分钟，为保护数据安全，当前会话已结束。</p>
-        <button @click="startNewSession" class="restart-button">开始新会话</button>
+        <h2>Session expired</h2>
+        
+        <button @click="startNewSession" class="restart-button">Start a new session</button>
       </div>
     </div>
   </div>

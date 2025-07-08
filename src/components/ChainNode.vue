@@ -60,11 +60,12 @@ function handleAddTextClick() {
     class="chain-node"
     :class="{ 'is-text-node': data.isTextNode, 'is-editing': isEditing }"
     :style="[nodeSelectionStyle, data.color ? { backgroundColor: data.color } : {}]"
+    @wheel.capture.stop
   >
     <NodeResizer
       v-if="id !== 'ghost-node'"
-      :min-width="180"
-      :min-height="60"
+      :min-width="80"
+      :min-height="80"
       :visible="selected"
       line-class-name="resizer-line"
       handle-class-name="resizer-handle"
@@ -79,7 +80,7 @@ function handleAddTextClick() {
 
     <div class="node-content-wrapper">
       <div class="node-content" @click="startEditing">
-        <p v-if="!isEditing" class="content-display">{{ data.content || 'Click to edit...' }}</p>
+        <p v-if="!isEditing" class="content-display">{{ data.content}}</p>
         <textarea
           v-else
           ref="textareaRef"
@@ -88,6 +89,7 @@ function handleAddTextClick() {
           @blur="saveEdit"
           @keydown.enter.prevent="saveEdit"
           @keydown.esc.prevent="saveEdit"
+          placeholder="Click to edit..."
         ></textarea>
       </div>
 
@@ -123,6 +125,7 @@ function handleAddTextClick() {
   height: 100%;
   width: 100%;
   position: relative;
+  overflow: hidden; 
 }
 .chain-node.is-text-node {
     background-color: #f7f1e3;
@@ -135,7 +138,7 @@ function handleAddTextClick() {
     display: flex;
     flex-direction: column;
     flex-grow: 1;
-    height: 100%;
+   
     padding: 12px;
 }
 
@@ -146,7 +149,7 @@ function handleAddTextClick() {
   font-size: 13px;
   color: #2c3e50;
   flex-grow: 1; /* Allows the content area to fill available space */
-  overflow-y: auto; /* Adds a scrollbar ONLY when content overflows */
+  
   min-height: 20px; /* Ensures the area has a minimum size */
   cursor: text;
 }
@@ -271,8 +274,8 @@ function handleAddTextClick() {
   border-color: #6366F1;
 }
 :deep(.vue-flow__handle) {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   background-color: #9e9e9e;
   border: 1px solid #f0f0f0;
 }

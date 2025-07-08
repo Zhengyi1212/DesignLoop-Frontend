@@ -66,7 +66,7 @@ function onDragLeave() {
 function onDrop(event) {
   event.preventDefault();
   isDraggingOver.value = false;
-  
+
   const snapshotDataString = event.dataTransfer.getData('application/json/snapshot');
   if (!snapshotDataString) return;
 
@@ -106,29 +106,21 @@ function onOpenCanvas() {
 </script>
 
 <template>
-  <div
-    class="custom-node"
-    :class="{ 
-      'is-editing': isEditingTitle || isEditingContent,
-      'is-dragging-over': isDraggingOver  // NEW: Add class for drop feedback
-    }"
-    :style="[
-      id === 'ghost-node' ? { pointerEvents: 'none' } : {},
-      nodeSelectionStyle
-    ]"
-    @dblclick="onOpenCanvas"
-    @dragover.prevent="onDragOver"
-    @dragleave="onDragLeave"
-    @drop="onDrop"
-  >
-    <NodeResizer
-      v-if="id !== 'ghost-node'"
-      :min-width="200"
-      :min-height="150"
-      :visible="selected"
-      line-class-name="resizer-line"
-      handle-class-name="resizer-handle"
-    />
+  <div class="custom-node" :class="{
+    'is-editing': isEditingTitle || isEditingContent,
+    'is-dragging-over': isDraggingOver  // NEW: Add class for drop feedback
+  }" 
+  :style="[
+    id === 'ghost-node' ? { pointerEvents: 'none' } : {},
+    nodeSelectionStyle
+  ]"
+   @dblclick="onOpenCanvas" 
+  @dragover.prevent="onDragOver" 
+  @dragleave="onDragLeave" 
+  @drop="onDrop" 
+  @wheel.stop>
+    <NodeResizer v-if="id !== 'ghost-node'" :min-width="200" :min-height="200" :visible="selected"
+      line-class-name="resizer-line" handle-class-name="resizer-handle" />
 
     <template v-if="id !== 'ghost-node'">
       <Handle id="top" :position="Position.Top" />
@@ -138,37 +130,42 @@ function onOpenCanvas() {
     </template>
 
     <div class="node-header" :style="nodeHeaderStyle">
-      <strong
-        v-if="!isEditingTitle"
-        @click.stop="startEditTitle"
-        title="Click to edit title"
-      >
-        {{ data.title || 'New Node' }}
-      </strong>
-      <input
-        v-else
-        ref="titleInput"
-        v-model="data.title"
-        @blur="saveChanges"
-        @keydown.enter="saveChanges"
-        @click.stop
-        class="title-input"
-        type="text"
-      />
-      <button v-if="id !== 'ghost-node' && !isEditingTitle" class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
+
+      <div class="title-container" v-if="!isEditingTitle">
+        <strong @click.stop="startEditTitle" title="Click to edit title">
+          {{ data.title || "New Node"}}
+        </strong>
+
+
+      </div>
+
+      <input v-else ref="titleInput" 
+      v-model="data.title"
+       @blur="saveChanges" 
+       @keydown.enter="saveChanges" 
+       @click.stop
+       
+        class="title-input" type="text" 
+        
+        />
+      <div v-if="data.appliedSnapshotId" class="snapshot-indicator" title="Applied Snapshot">
+        <span class="icon"></span>
+        ID:{{ data.appliedSnapshotId }}
+      </div>
+      <button v-if="!isEditingTitle" class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
+
     </div>
 
     <div class="node-content" @click.stop="startEditContent" title="Click to edit content">
-      <p v-if="!isEditingContent" class="content-display">{{ data.content || '' }}</p>
-      <textarea
-        v-else
-        ref="contentInput"
-        v-model="data.content"
-        @blur="saveChanges"
-        @click.stop
-        class="content-input"
-      ></textarea>
+      <p v-if="!isEditingContent" class="content-display">{{ data.content || ''|| 'Click to edit...' }}</p>
+      <textarea v-else ref="contentInput" 
+      v-model="data.content" 
+      @blur="saveChanges" 
+      @click.stop
+      placeholder="Click to edit..."
+        class="content-input"></textarea>
     </div>
+
   </div>
 </template>
 
@@ -178,14 +175,16 @@ function onOpenCanvas() {
   border: 1px solid #b7c0ce;
   border-radius: 8px;
   font-family: 'JetBrains Mono', sans-serif;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease-in-out;
   cursor: grab;
   display: flex;
   flex-direction: column;
   height: 100%;
   width: 100%;
+  overflow: hidden; 
 }
+
 /* NEW: Style for when a snapshot is being dragged over the node */
 .custom-node.is-dragging-over {
   outline: 3px dashed #2ecc71;
@@ -193,12 +192,15 @@ function onOpenCanvas() {
   box-shadow: 0 0 20px rgba(46, 204, 113, 0.5);
   transform: scale(1.02);
 }
+
 .custom-node.is-editing {
   cursor: default;
 }
+
 .vue-flow__node-selected .custom-node {
   border-color: transparent;
 }
+
 .node-header {
   color: white;
   padding: 8px 12px;
@@ -209,6 +211,7 @@ function onOpenCanvas() {
   align-items: center;
   transition: background-color 0.2s;
 }
+
 .node-header strong {
   white-space: nowrap;
   overflow: hidden;
@@ -216,6 +219,7 @@ function onOpenCanvas() {
   cursor: text;
   width: 100%;
 }
+
 .title-input {
   background-color: transparent;
   color: white;
@@ -228,6 +232,7 @@ function onOpenCanvas() {
   padding: 0;
   margin: 0;
 }
+
 .node-content {
   padding: 12px;
   font-size: 13px;
@@ -236,12 +241,14 @@ function onOpenCanvas() {
   overflow-y: auto;
   cursor: text;
 }
+
 .content-display {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
   min-height: 20px;
 }
+
 .content-input {
   width: 100%;
   height: 100%;
@@ -256,6 +263,7 @@ function onOpenCanvas() {
   font-size: 13px;
   color: #2c3e50;
 }
+
 .delete-btn {
   background: none;
   border: none;
@@ -267,6 +275,7 @@ function onOpenCanvas() {
   opacity: 0.8;
   transition: opacity 0.2s;
 }
+
 .delete-btn:hover {
   opacity: 1;
   color: red;
@@ -279,16 +288,45 @@ function onOpenCanvas() {
   border-radius: 2px;
   border: 1px solid white;
 }
+
 :deep(.resizer-line) {
   border-color: #6366F1;
 }
+
 :deep(.vue-flow__handle) {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   background-color: #9e9e9e;
   border: 1px solid #f0f0f0;
 }
+
 :deep(.vue-flow__handle:hover) {
   background-color: #007bff;
+}
+
+.node-header .snapshot-indicator {
+  position: absolute;
+  bottom: 5px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.7);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #34495e;
+  pointer-events: none;
+  /* Allows clicks to pass through to the node */
+}
+
+.node-header .snapshot-indicator .icon {
+  width: 10px;
+  height: 10px;
+  background-color: #27ae60;
+  /* A nice green color */
+  border-radius: 50%;
+  margin-right: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 </style>

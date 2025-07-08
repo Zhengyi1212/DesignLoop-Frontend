@@ -120,8 +120,8 @@ function placeNodeOnClick(event) {
     id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter++}`,
     type: 'chain',
     position: { ...ghostNode.position },
-    width: 200,
-    height: 100,
+    width: 120,
+    height: 120,
     data: {
       content: '',
       color: newNodeColor.value,
@@ -318,72 +318,61 @@ function generateNodeChain(nodeDataList) {
   subflow.addNodes(newNodes);
   subflow.addEdges(newEdges);
 }
-
-/**
- * NEW FUNCTION: Finds the chain of predecessor nodes for a given start node.
- * This function is adapted from the `findSuccessors` method in App.vue.
- * It traverses the graph backwards from the startNodeId, collecting all parent nodes.
- * It specifically ignores nodes marked as text nodes (data.isTextNode === true).
- *
- * @param {string} startNodeId - The ID of the node to start the search from.
- * @param {Array} allNodes - The complete list of nodes in the sub-canvas.
- * @param {Array} allEdges - The complete list of edges in the sub-canvas.
- * @returns {Array} - A sorted list of predecessor nodes, each with a level and content.
- */
-function findChainNodePredecessors(startNodeId, allNodes, allEdges) {
-  const predecessors = [];
-  const queue = [];
-  const visited = new Set([startNodeId]);
-
-  // 1. Find all direct predecessors of the start node and add them to the queue.
-  allEdges.forEach(edge => {
+function findDirectPredecessorsWithText(startNodeId, allNodes, allEdges) {
+  
+  // 1. 直接遍历所有边，找到所有以 startNodeId 为目标的边，其源头就是 level 1 的前驱节点。
+  const directPredecessors = [];
+  for (const edge of allEdges) {
     if (edge.target === startNodeId) {
-      const sourceNode = allNodes.find(n => n.id === edge.source);
-      // Only process chain nodes, not text nodes.
-      if (sourceNode && !sourceNode.data.isTextNode) {
-        if (!visited.has(edge.source)) {
-          queue.push({ nodeId: edge.source, level: 1 });
-          visited.add(edge.source);
-        }
-      }
-    }
-  });
-
-  // 2. Process the queue using Breadth-First Search (BFS).
-  while (queue.length > 0) {
-    const { nodeId: currentId, level: currentLevel } = queue.shift();
-    const currentNode = allNodes.find(n => n.id === currentId);
-
-    if (currentNode && !currentNode.data.isTextNode) {
-      const content = currentNode.data.content || '';
-      const placeholderTexts = [''];
-
-      // Only add nodes with meaningful content to the result list.
-      if (content && !placeholderTexts.includes(content.trim())) {
-        predecessors.push({
-          level: currentLevel,
-          content: content
-        });
-      }
-
-      // 3. Find the next level of predecessors and add them to the queue.
-      const incomingEdges = allEdges.filter(edge => edge.target === currentId);
-      for (const edge of incomingEdges) {
-         const sourceNode = allNodes.find(n => n.id === edge.source);
-         if (sourceNode && !sourceNode.data.isTextNode) {
-            if (!visited.has(edge.source)) {
-                visited.add(edge.source);
-                queue.push({ nodeId: edge.source, level: currentLevel + 1 });
-            }
-         }
+      const predNode = allNodes.find(n => n.id === edge.source);
+      // 确保找到的这个前驱节点本身不是一个 Text Node
+      if (predNode && !predNode.data.isTextNode) {
+        directPredecessors.push(predNode);
       }
     }
   }
 
-  // Return the predecessors, sorted by their level (distance from the start node).
-  return predecessors.sort((a, b) => a.level - b.level);
-}
+  // 如果没有找到任何符合条件的直接前驱节点，返回空数组。
+  if (directPredecessors.length === 0) {
+    return [];
+  }
 
+  // 2. 为每个找到的直接前驱节点，查找其相连的 Text Node。
+  const results = directPredecessors.map(predNode => {
+    let foundTextNodeContent = ''; // 默认为空字符串
+
+    // 遍历所有边，寻找连接了当前前驱节点（predNode）和某个 Text Node 的边
+    for (const edge of allEdges) {
+      let connectedNodeId = null;
+
+      // 确定这条边连接的另一个节点的ID
+      if (edge.source === predNode.id) {
+        connectedNodeId = edge.target;
+      } else if (edge.target === predNode.id) {
+        connectedNodeId = edge.source;
+      }
+      
+      // 必须确保我们找到的“另一个节点”不是最初的 startNodeId，避免找回去
+      if (connectedNodeId && connectedNodeId !== startNodeId) {
+        const connectedNode = allNodes.find(n => n.id === connectedNodeId);
+        
+        // 如果这个连接的节点是 Text Node，我们就找到了
+        if (connectedNode && connectedNode.data.isTextNode) {
+          foundTextNodeContent = connectedNode.data.content || '';
+          break; // 找到后就跳出内层循环，继续为下一个前驱节点查找
+        }
+      }
+    }
+
+    // 返回最终的对象
+    return {
+      node_content: predNode.data.content,
+      text_content: foundTextNodeContent,
+    };
+  });
+
+  return results;
+}
 
 async function handleGenerateTextNode({ sourceNodeId, position }) {
     const sourceNode = subflow.findNode(sourceNodeId);
@@ -392,8 +381,10 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
     isGeneratingRationaleNodeId.value = sourceNodeId;
     try {
         // --- MODIFICATION: Find predecessors before calling the backend ---
-        const predecessors = findChainNodePredecessors(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value);
-        console.log(`[SubCanvas] Found ${predecessors.length} predecessors for node ${sourceNodeId}:`, predecessors);
+        //const predecessors = findChainNodePredecessors(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value);
+        //console.log(`[SubCanvas] Found ${predecessors.length} predecessors for node ${sourceNodeId}:`, predecessors);
+        const predecessors = findDirectPredecessorsWithText(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value)
+        console.log(predecessors[0])
         const formattedChain = (chainList.value || []).map(item => ({ content: item }));
         const payload = {
             parent_node_title: props.parentNodeTitle,
@@ -605,12 +596,7 @@ onUnmounted(() => {
       </div>
       <div class="sub-canvas-content">
         <VueFlow :id="props.nodeId" v-model:nodes="nodes" v-model:edges="edges" :fit-view-on-init="true" class="sub-flow" ref="vueFlowRef">
-          <template #node-custom="customProps">
-            <CustomNode v-bind="customProps" @delete="subflow.removeNodes([$event])" @open-canvas="handleNodeDoubleClick" />
-          </template>
-          <template #node-run="runProps">
-            <RunNode v-bind="runProps" @delete="subflow.removeNodes([$event])" @run-node="handleSubNodeRun" :is-running="runningSubNodeId === runProps.id" />
-          </template>
+          
           <template #node-chain="chainProps">
             <ChainNode
               v-bind="chainProps"

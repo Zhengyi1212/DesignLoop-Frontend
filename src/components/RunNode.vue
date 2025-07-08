@@ -132,7 +132,7 @@ function onRun() {
     <NodeResizer
       v-if="id !== 'ghost-node'"
       :min-width="200"
-      :min-height="150"
+      :min-height="200"
       :visible="selected"
       line-class-name="resizer-line"
       handle-class-name="resizer-handle"
@@ -149,9 +149,9 @@ function onRun() {
       <strong
         v-if="!isEditingTitle"
         @click.stop="startEditTitle"
-        title="Click to edit title"
+        
       >
-        {{ data.title || 'Run Node' }}
+        {{ data.title || "New Node" }}
       </strong>
       <input
         v-else
@@ -160,6 +160,7 @@ function onRun() {
         @blur="saveChanges"
         @keydown.enter="saveChanges"
         @click.stop
+       
         class="title-input"
         type="text"
       />
@@ -174,6 +175,7 @@ function onRun() {
         v-model="data.content"
         @blur="saveChanges"
         @click.stop
+        placeholder="Click to edit..."
         class="content-input"
       ></textarea>
     </div>

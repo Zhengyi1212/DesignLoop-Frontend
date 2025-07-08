@@ -46,6 +46,7 @@ function onGenerate() {
         :key="index" 
         class="panel-box"
         :class="{ 'user-panel': panel.title === 'User' }"
+        
       >
         <div class="panel-header">
           <h3>{{ panel.title }}</h3>
@@ -65,6 +66,8 @@ function onGenerate() {
           :value="panel.content"
           @input="handleInput($event, index)"
           :placeholder="`Enter ${panel.title}...`"
+          @keydown.ctrl.z.stop
+  @keydown.meta.z.stop
         ></textarea>
       </div>
     </div>

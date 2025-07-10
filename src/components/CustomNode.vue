@@ -119,7 +119,7 @@ function onOpenCanvas() {
   @dragleave="onDragLeave" 
   @drop="onDrop" 
   @wheel.stop>
-    <NodeResizer v-if="id !== 'ghost-node'" :min-width="200" :min-height="200" :visible="selected"
+    <NodeResizer v-if="id !== 'ghost-node'" :min-width="300" :min-height="300" :visible="selected"
       line-class-name="resizer-line" handle-class-name="resizer-handle" />
 
     <template v-if="id !== 'ghost-node'">
@@ -144,6 +144,7 @@ function onOpenCanvas() {
        @blur="saveChanges" 
        @keydown.enter="saveChanges" 
        @click.stop
+       @mousedown.stop
        
         class="title-input" type="text" 
         
@@ -156,12 +157,17 @@ function onOpenCanvas() {
 
     </div>
 
-    <div class="node-content" @click.stop="startEditContent" title="Click to edit content">
+    <div class="node-content"
+     @click.stop="startEditContent"
+     title="Click to edit content"
+     
+     >
       <p v-if="!isEditingContent" class="content-display">{{ data.content || ''|| 'Click to edit...' }}</p>
       <textarea v-else ref="contentInput" 
       v-model="data.content" 
       @blur="saveChanges" 
       @click.stop
+      @mousedown.stop
       placeholder="Click to edit..."
         class="content-input"></textarea>
     </div>
@@ -171,7 +177,7 @@ function onOpenCanvas() {
 
 <style scoped>
 .custom-node {
-  background-color: #ffffff;
+  
   border: 1px solid #b7c0ce;
   border-radius: 8px;
   font-family: 'JetBrains Mono', sans-serif;
@@ -183,6 +189,8 @@ function onOpenCanvas() {
   height: 100%;
   width: 100%;
   overflow: hidden; 
+  
+  background-color: v-bind('props.data.color || "#34495e"');
 }
 
 /* NEW: Style for when a snapshot is being dragged over the node */
@@ -195,6 +203,11 @@ function onOpenCanvas() {
 
 .custom-node.is-editing {
   cursor: default;
+  overflow: hidden;
+  
+}
+.custom-node.is-editing .node-content {
+  overflow-y: hidden;
 }
 
 .vue-flow__node-selected .custom-node {
@@ -234,15 +247,20 @@ function onOpenCanvas() {
 }
 
 .node-content {
-  padding: 12px;
+   
+  height: calc(100% - 40px); 
   font-size: 13px;
   color: #2c3e50;
   flex-grow: 1;
   overflow-y: auto;
   cursor: text;
+   background-color: #ffffff; /* 保持 content 区域为白色 */
+  background-clip: content-box;
+  border-radius: 4px; /* 可选：让 content 区域有圆角 */
 }
 
 .content-display {
+  padding: 12px;
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
@@ -250,17 +268,18 @@ function onOpenCanvas() {
 }
 
 .content-input {
+  padding: 12px;
   width: 100%;
   height: 100%;
   border: none;
   outline: none;
   resize: none;
-  background-color: #f0f2f5;
+  
   border-radius: 4px;
-  padding: 8px;
+  
   box-sizing: border-box;
   font-family: 'JetBrains Mono', sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: #2c3e50;
 }
 
@@ -286,22 +305,30 @@ function onOpenCanvas() {
   height: 8px;
   background-color: #6366F1;
   border-radius: 2px;
-  border: 1px solid white;
+  border: 2px solid white;
 }
 
 :deep(.resizer-line) {
   border-color: #6366F1;
+  border-width: 2px;
 }
 
 :deep(.vue-flow__handle) {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 11px;
   background-color: #9e9e9e;
   border: 1px solid #f0f0f0;
 }
 
 :deep(.vue-flow__handle:hover) {
   background-color: #007bff;
+}
+/* 隐藏上下handle但保留功能 */
+.custom-node .vue-flow__handle-top,
+.custom-node .vue-flow__handle-bottom {
+  opacity: 0;  /* 完全透明 */
+  
+
 }
 
 .node-header .snapshot-indicator {
@@ -313,7 +340,7 @@ function onOpenCanvas() {
   background-color: rgba(255, 255, 255, 0.7);
   padding: 2px 6px;
   border-radius: 10px;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: bold;
   color: #34495e;
   pointer-events: none;
@@ -321,8 +348,8 @@ function onOpenCanvas() {
 }
 
 .node-header .snapshot-indicator .icon {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   background-color: #27ae60;
   /* A nice green color */
   border-radius: 50%;

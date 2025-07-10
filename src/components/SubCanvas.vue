@@ -4,15 +4,10 @@ import { VueFlow, useVueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import Toolbar from './Toolbar.vue';
-import CustomNode from './CustomNode.vue';
-import RunNode from './RunNode.vue';
 import EditModal from './EditModal.vue';
 
 import ChainNode from './ChainNode.vue';
 
-
-const GHOST_NODE_OFFSET_X = -100;
-const GHOST_NODE_OFFSET_Y = -75;
 const TEXT_NODE_OFFSET_Y = -120;
 
 const props = defineProps({
@@ -62,7 +57,6 @@ function handleChainNodeContentUpdate({ id, content }) {
   }
 }
 
-// [REVISED] A more robust implementation for filtering out text nodes before saving.
 async function handleSaveButton() {
   if (isSaveButtonRunning.value) return;
   isSaveButtonRunning.value = true;
@@ -71,19 +65,16 @@ async function handleSaveButton() {
     const allNodes = subflow.getNodes.value;
     const allEdges = subflow.getEdges.value;
 
-    // 1. Identify text nodes by their unique ID prefix, which is more reliable.
     const textNodeIds = new Set(
       allNodes
         .filter(n => n.id.startsWith('sub-text-node-'))
         .map(n => n.id)
     );
 
-    // 2. Filter nodes to exclude text nodes and the ghost node.
     const nodesForSnapshot = allNodes.filter(n =>
       n.id !== 'ghost-node' && !textNodeIds.has(n.id)
     );
 
-    // 3. Filter edges to exclude any that connect to a text node.
     const edgesForSnapshot = allEdges.filter(e =>
       !textNodeIds.has(e.source) && !textNodeIds.has(e.target)
     );
@@ -121,13 +112,13 @@ function placeNodeOnClick(event) {
     type: 'chain',
     position: { ...ghostNode.position },
     width: 120,
-    height: 120,
+    height: 80,
     data: {
       content: '',
       color: newNodeColor.value,
       connections: { in: [], out: [] },
       subGraph: { nodes: [], edges: [] },
-      isManual: true, 
+      isManual: true,
     },
   };
   subflow.addNodes([newNode]);
@@ -168,8 +159,8 @@ subflow.onPaneMouseMove((event) => {
       id: 'ghost-node',
       type: 'chain',
       position: adjustedPosition,
-      width: 200,
-      height: 100,
+      width: 120,
+      height: 80,
       data: {
         content: 'Click to place',
         color: newNodeColor.value
@@ -179,18 +170,24 @@ subflow.onPaneMouseMove((event) => {
   }
 });
 
+// ✅ 包含了大小修复的最终函数
 function handleDuplicateSubNode() {
   const selectedNodes = subflow.getSelectedNodes.value;
   if (selectedNodes.length !== 1) return;
   const originalNode = selectedNodes[0];
   if (originalNode.id === 'ghost-node') return;
+
   const newNode = {
     id: `sub-node-${props.nodeId}-${subNodeIdCounter++}`,
     type: originalNode.type,
     position: {
-      x: originalNode.position.x + 40,
+      x: originalNode.position.x + 60,
       y: originalNode.position.y + 40,
     },
+    // 复制节点的尺寸信息，同时兼容 style 对象和 width/height 属性
+    width: originalNode.width,
+    height: originalNode.height,
+    style: originalNode.style ? { ...originalNode.style } : undefined,
     data: {
       ...JSON.parse(JSON.stringify(originalNode.data)),
       connections: { in: [], out: [] },
@@ -199,6 +196,7 @@ function handleDuplicateSubNode() {
   subflow.addNodes([newNode]);
 }
 
+// ✅ 移除了不再需要的 stopImmediatePropagation
 function handleKeyDown(event) {
   if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
     event.preventDefault();
@@ -287,7 +285,7 @@ function generateNodeChain(nodeDataList) {
       id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter++}`,
       type: 'chain',
       position: { x: startX + index * gapX, y: startY },
-      style: { width: '200px', height: '100px' },
+      style: { width: '120px', height: '80px' },
       data: {
         content: content,
         connections: { in: [], out: [] },
@@ -307,7 +305,7 @@ function generateNodeChain(nodeDataList) {
       targetHandle: 'left',
       type: 'custom',
       selectable: true,
-      interactionWidth: 30,
+      interactionWidth: 40,
     };
     newEdges.push(newEdge);
   }
@@ -320,51 +318,42 @@ function generateNodeChain(nodeDataList) {
 }
 function findDirectPredecessorsWithText(startNodeId, allNodes, allEdges) {
   
-  // 1. 直接遍历所有边，找到所有以 startNodeId 为目标的边，其源头就是 level 1 的前驱节点。
   const directPredecessors = [];
   for (const edge of allEdges) {
     if (edge.target === startNodeId) {
       const predNode = allNodes.find(n => n.id === edge.source);
-      // 确保找到的这个前驱节点本身不是一个 Text Node
       if (predNode && !predNode.data.isTextNode) {
         directPredecessors.push(predNode);
       }
     }
   }
 
-  // 如果没有找到任何符合条件的直接前驱节点，返回空数组。
   if (directPredecessors.length === 0) {
     return [];
   }
 
-  // 2. 为每个找到的直接前驱节点，查找其相连的 Text Node。
   const results = directPredecessors.map(predNode => {
-    let foundTextNodeContent = ''; // 默认为空字符串
+    let foundTextNodeContent = ''; 
 
-    // 遍历所有边，寻找连接了当前前驱节点（predNode）和某个 Text Node 的边
     for (const edge of allEdges) {
       let connectedNodeId = null;
 
-      // 确定这条边连接的另一个节点的ID
       if (edge.source === predNode.id) {
         connectedNodeId = edge.target;
       } else if (edge.target === predNode.id) {
         connectedNodeId = edge.source;
       }
       
-      // 必须确保我们找到的“另一个节点”不是最初的 startNodeId，避免找回去
       if (connectedNodeId && connectedNodeId !== startNodeId) {
         const connectedNode = allNodes.find(n => n.id === connectedNodeId);
         
-        // 如果这个连接的节点是 Text Node，我们就找到了
         if (connectedNode && connectedNode.data.isTextNode) {
           foundTextNodeContent = connectedNode.data.content || '';
-          break; // 找到后就跳出内层循环，继续为下一个前驱节点查找
+          break;
         }
       }
     }
 
-    // 返回最终的对象
     return {
       node_content: predNode.data.content,
       text_content: foundTextNodeContent,
@@ -380,9 +369,6 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
 
     isGeneratingRationaleNodeId.value = sourceNodeId;
     try {
-        // --- MODIFICATION: Find predecessors before calling the backend ---
-        //const predecessors = findChainNodePredecessors(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value);
-        //console.log(`[SubCanvas] Found ${predecessors.length} predecessors for node ${sourceNodeId}:`, predecessors);
         const predecessors = findDirectPredecessorsWithText(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value)
         console.log(predecessors[0])
         const formattedChain = (chainList.value || []).map(item => ({ content: item }));
@@ -392,13 +378,13 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             goal: goal.value,
             instruction: instruction.value,
             current_node_content: sourceNode.data.content,
-            chain: formattedChain, // This is the chain generated by the main "Run" button
-            predecessor_chain: predecessors, // --- MODIFICATION: Pass the specific predecessor chain to the backend ---
+            chain: formattedChain, 
+            predecessor_chain: predecessors,
             design_background: props.designBackground,
             design_goal:props.designGoal
         };
 
-        const response = await fetch('/api/generate-rationale', {
+        const response = await fetch('http://localhost:7001/generate-rationale', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -422,8 +408,8 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
                 id: `sub-text-node-${props.nodeId}-${subNodeIdCounter++}`,
                 type: 'chain',
                 position: { x: position.x - 50, y: position.y + TEXT_NODE_OFFSET_Y - 50, },
-                width: 300,
-                height: 160,
+                width: 120,
+                height: 80,
                 data: {
                     content: rationaleContent,
                     isTextNode: true,
@@ -490,7 +476,7 @@ async function handleSubCanvasRun() {
         console.log("[SubCanvas] No auto-generated nodes found to clear.");
     }
 
-    const url = "/api/generate-thinking-chain";
+    const url = "http://localhost:7001/generate-thinking-chain";
     const payload = {
       design_background: props.designBackground,
       design_goal: props.designGoal,
@@ -570,7 +556,7 @@ onUnmounted(() => {
             <div v-if="isSaveButtonRunning" class="spinner"></div>
             <span v-else>Save</span>
           </button>
-          <button @click="emit('close')" class="close-btn" title="Close Canvas">×</button>
+          <button @click="emit('close')"  class="close-btn" title="Close Canvas">×</button>
         </div>
       </div>
       <div class="upper-area">
@@ -634,8 +620,8 @@ onUnmounted(() => {
   align-items: center;
 }
 .sub-canvas-window {
-  width: 75vw;
-  height: 85vh;
+  width: 85vw;
+  height: 90vh;
   background-color: white;
   border-radius: 12px;
   box-shadow: 0 15px 40px rgba(0, 0, 0, 0.25);
@@ -645,7 +631,7 @@ onUnmounted(() => {
   border: 1px solid #dee2e6;
 }
 .sub-canvas-header {
-  padding: 10px 20px;
+  padding: 6px 12px;
   background-color: #f8f9fa;
   border-top-left-radius: 11px;
   border-top-right-radius: 11px;
@@ -710,7 +696,7 @@ onUnmounted(() => {
   border-radius: 6px;
   border: 1px solid #ced4da;
   font-family: 'JetBrains Mono', sans-serif;
-  font-size: 14px;
+  font-size: 11px;
   resize: vertical;
   min-height: 40px;
   height : 40px;
@@ -726,25 +712,38 @@ onUnmounted(() => {
   align-items: center;
   padding: 0 20px;
 }
+.run-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  height: 40px;
+}
 .save-btn, .run-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 8px 16px;
+  padding: 6px 12px;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
-  height: 40px;
+  font-size: 13px;
+  height: 30px;
 }
 .save-btn {
   border: 1px solid #007bff;
   background-color: #007bff;
   color: white;
-  font-weight: 500;
-  min-width: 120px;
+  font-weight: 300;
+  width: 60px;
 }
 .save-btn:hover:not(:disabled) {
   background-color: #0056b3;
@@ -795,6 +794,7 @@ onUnmounted(() => {
   bottom: 0;
   left: 0;
   width: 100%;
+  height: 8%;
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
   overflow: hidden;

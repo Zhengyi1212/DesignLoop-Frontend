@@ -9,6 +9,10 @@ defineProps({
 });
 const emit = defineEmits(['delete-snapshot']);
 const { onDragStart } = useDragAndDrop();
+const getRandomColor = () => {
+  const hue = Math.floor(Math.random() * 360)
+  return `hsl(${hue}, 80%, 90%)` // 80%饱和度 + 90%亮度 = 柔和的浅色
+}
 </script>
 
 <template>
@@ -22,12 +26,20 @@ const { onDragStart } = useDragAndDrop();
 
     </div>
     <div v-else class="snapshots-list">
-      <div v-for="snapshot in snapshots" :key="snapshot.id" class="snapshot-item" draggable="true"
-        @dragstart="onDragStart($event, snapshot)" title="Drag me to a node on the canvas">
-
+      <div v-for="snapshot in snapshots" 
+      :key="snapshot.id" class="snapshot-item" 
+      draggable="true"
+      @dragstart="onDragStart($event, snapshot)" 
+      title="Drag to a node on the canvas"
+      :style="{ backgroundColor: getRandomColor() }"
+      >
+        
         <div class="snapshot-info">
-          <div class="snapshot-goal">{{ snapshot.goal || 'Untitled Snapshot' }}</div>
+          <div class="snapshot-goal">Goal: {{ snapshot.goal }}</div>
+          <div class="snapshot-goal">Instruction: {{ snapshot.data.instruction }}</div>
           <div class="snapshot-id">ID: {{ snapshot.id }}</div>
+          
+          
         </div>
         <button class="delete-button" @click.stop="emit('delete-snapshot', snapshot.id)" title="Delete this chain">
           ×
@@ -120,11 +132,11 @@ const { onDragStart } = useDragAndDrop();
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 14px;
+  font-size: 10px;
 }
 
 .snapshot-id {
-  font-size: 11px;
+  font-size: 8px;
   color: #adb5bd;
   white-space: nowrap;
   overflow: hidden;
@@ -135,13 +147,13 @@ const { onDragStart } = useDragAndDrop();
   background: none;
   border: none;
   color: #adb5bd;
-  font-size: 24px;
+  font-size: 16px;
   cursor: pointer;
-  padding: 0 5px;
+  padding: 0 1px;
   line-height: 1;
   border-radius: 50%;
-  width: 28px;
-  height: 28px;
+  width: 12px;
+  height: 14px;
   flex-shrink: 0; /* 防止按钮被压缩 */
   transition: all 0.2s ease;
 }

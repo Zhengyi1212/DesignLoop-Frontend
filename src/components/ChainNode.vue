@@ -64,7 +64,7 @@ function handleAddTextClick() {
   >
     <NodeResizer
       v-if="id !== 'ghost-node'"
-      :min-width="80"
+      :min-width="120"
       :min-height="80"
       :visible="selected"
       line-class-name="resizer-line"
@@ -90,6 +90,7 @@ function handleAddTextClick() {
           @keydown.enter.prevent="saveEdit"
           @keydown.esc.prevent="saveEdit"
           placeholder="Click to edit..."
+          @mousedown.stop
         ></textarea>
       </div>
 
@@ -188,8 +189,8 @@ function handleAddTextClick() {
   right: 8px;
   background: rgba(0,0,0,0.1);
   border-radius: 50%;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   font-size: 16px;
   color: #555;
   line-height: 1;
@@ -210,10 +211,10 @@ function handleAddTextClick() {
 /* --- NEW: Added a dedicated footer for the action button --- */
 .node-footer {
   flex-shrink: 0; /* Prevents the footer from shrinking */
-  padding-top: 8px;
+  padding-top: 4px;
   display: flex;
   justify-content: flex-end;
-  height: 36px; /* Give footer a fixed height */
+  height: 15px; /* Give footer a fixed height */
 }
 
 .action-btn {
@@ -221,11 +222,11 @@ function handleAddTextClick() {
   color: #495057;
   border-radius: 5px;
   padding: 5px 12px;
-  font-size: 12px;
+  font-size: 6px;
   font-family: 'JetBrains Mono', sans-serif;
   font-weight: 500;
-  min-width: 80px; /* Ensure button width is consistent */
-  height: 28px;
+  width: 28px; /* Ensure button width is consistent */
+  height: 18px;
   border: none;
   cursor: pointer;
   display: flex;
@@ -255,7 +256,7 @@ function handleAddTextClick() {
   border-radius: 50%;
   border-top-color: #495057;
   width: 14px;
-  height: 14px;
+  height: 10px;
   animation: spin 1s linear infinite;
 }
 @keyframes spin {
@@ -264,14 +265,15 @@ function handleAddTextClick() {
 }
 
 :deep(.resizer-handle) {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   background-color: #6366F1;
   border-radius: 2px;
   border: 1px solid white;
 }
 :deep(.resizer-line) {
   border-color: #6366F1;
+  border-width: 3px;
 }
 :deep(.vue-flow__handle) {
   width: 10px;
@@ -279,6 +281,14 @@ function handleAddTextClick() {
   background-color: #9e9e9e;
   border: 1px solid #f0f0f0;
 }
+.chain-node .vue-flow__handle-top {
+  opacity: 0;  
+}
+
+.chain-node .vue-flow__handle-bottom {
+  opacity: 0;  
+}
+
 :deep(.vue-flow__handle:hover) {
   background-color: #007bff;
 }

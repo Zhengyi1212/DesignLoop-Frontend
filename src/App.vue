@@ -16,7 +16,8 @@ const RunNode = defineAsyncComponent(() => import('./components/RunNode.vue'));
 
 let nodeIdCounter = 0;
 let snapshotIdCounter = 0;
-
+let pipelineCounter = 0;
+let pipelineOffset  = 200;
 const { addNodes, addEdges, removeEdges, findNode, removeNodes, project, onPaneMouseMove, getNodes, getSelectedNodes } = useVueFlow();
 
 const nodes = ref([]);
@@ -199,6 +200,7 @@ function handleApplySnapshot({ nodeId, snapshotData }) {
   const dataToApply = snapshotData.data;
   console.log(dataToApply.id)
   console.log(snapshotData.data.goal)
+  console.log(snapshotData.data.instruction)
   targetNode.data.appliedSnapshotId = snapshotData.id
   const newSubGraph = JSON.parse(JSON.stringify(dataToApply.subGraph));
   targetNode.data.instruction = dataToApply.instruction;
@@ -403,6 +405,9 @@ function handleDuplicateNode() {
   addNodes([newNode]);
 }
 function handleKeyDown(event) {
+  if (activeSubCanvasData.value) {
+    return;
+  }
   if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
     event.preventDefault();
     handleDuplicateNode();
@@ -510,7 +515,7 @@ async function handleFetchPipeline() {
 function node_chain_autogene(nodeData) {
   if (!Array.isArray(nodeData) || nodeData.length === 0) return;
   const newNodes = []; const newEdges = [];
-  const startX = 100; const startY = 200; const gapX = 250;
+  const startX = 100; const startY = 200 + pipelineOffset *pipelineCounter; const gapX = 250;
   nodeData.forEach((data, index) => {
     const newNode = {
       id: `chain-node-${nodeIdCounter++}`, type: 'custom',
@@ -534,6 +539,7 @@ function node_chain_autogene(nodeData) {
     sourceNode.data.connections.out.push({ edgeId: newEdge.id, targetId: targetNode.id, sourceHandle: 'right' });
     targetNode.data.connections.in.push({ edgeId: newEdge.id, sourceId: sourceNode.id, targetHandle: 'left' });
   }
+  pipelineCounter =  pipelineCounter+1;
   addNodes(newNodes); addEdges(newEdges);
 }
 async function handleGeneration() {
@@ -718,9 +724,9 @@ function handleDeleteSnapshot(snapshotIdToDelete) {
       :style="{ width: rightPanelWidth + 'px' }" 
       :class="{ 'is-collapsed': isRightPanelCollapsed }"
     >
-      <div class="resizer" @mousedown="startResize" title="拖动来调整大小"></div>
+      <div class="resizer" @mousedown="startResize" title="Drag to adjust the suze"></div>
       
-      <button class="expand-btn" v-if="isRightPanelCollapsed" @click="toggleRightPanel" title="展开面板">
+      <button class="expand-btn" v-if="isRightPanelCollapsed" @click="toggleRightPanel" title="Expand">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </button>
 
@@ -800,10 +806,11 @@ body, html {
 }
 .main-toolbar-wrapper {
   position: absolute;
-  bottom: 20px;
+  bottom: 0px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 10;
+  
 }
 
 .main-toolbar-wrapper :deep(.toolbar-container) {

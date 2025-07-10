@@ -139,9 +139,9 @@ function onRun() {
     />
 
     <template v-if="id !== 'ghost-node'">
-      <Handle id="top" :position="Position.Top" />
+     
       <Handle id="left" :position="Position.Left" />
-      <Handle id="bottom" :position="Position.Bottom" />
+      
       <Handle id="right" :position="Position.Right" />
     </template>
 
@@ -151,7 +151,7 @@ function onRun() {
         @click.stop="startEditTitle"
         
       >
-        {{ data.title || "New Node" }}
+        {{ data.title || "Edit instruction..." }}
       </strong>
       <input
         v-else
@@ -175,7 +175,8 @@ function onRun() {
         v-model="data.content"
         @blur="saveChanges"
         @click.stop
-        placeholder="Click to edit..."
+        readonly
+        @mousedown.stop
         class="content-input"
       ></textarea>
     </div>
@@ -237,7 +238,7 @@ function onRun() {
   cursor: text;
 }
 .node-content {
-  padding: 12px;
+  
   font-size: 13px;
   color: #2c3e50;
   flex-grow: 1;
@@ -265,6 +266,7 @@ function onRun() {
     align-items: center;
     height: 40px;
 }
+
 .run-btn {
     display: flex; align-items: center; gap: 8px; padding: 6px 12px;
     border: 1px solid #e67e22; background-color: #f39c12; color: white;
@@ -307,5 +309,10 @@ function onRun() {
 }
 :deep(.vue-flow__handle) {
   background-color: #9e9e9e;
+}
+.run-node .vue-flow__handle-top,
+.run-node .vue-flow__handle-bottom {
+  opacity: 0;  /* 完全透明 */
+
 }
 </style>

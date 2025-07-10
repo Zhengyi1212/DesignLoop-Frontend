@@ -83,12 +83,12 @@ function openColorPicker() {
 
       <!-- New Button: Run Node -->
       <button v-if="isShow" class="tool-button" :class="{ active: isAddingRunNode }"
-        @click="handleAddRunNodeClick" title="Click to add a new executable Run Node">
+        @click="handleAddRunNodeClick" title="Click to add a new executable AI Node">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="5 3 19 12 5 21 5 3"></polygon>
         </svg>
-        <span>Run Node</span>
+        <span>AI Node</span>
       </button>
 
       <button class="tool-button" :class="{ active: isAddGroup }"
@@ -133,7 +133,8 @@ function openColorPicker() {
   justify-content: space-between;
   padding: 20px 20px;
   gap: 20px;
-  height: 80px;
+  height: 55px;
+  border-radius: 18px;
   background-color: #ffffff;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
   border-top: 1px solid #dee2e6;
@@ -150,7 +151,8 @@ function openColorPicker() {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 15px;
+ 
+  padding: 4px 8px;
   border: 1px solid #ced4da;
   background-color: #fff;
   border-radius: 18px;

@@ -5,7 +5,7 @@ import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import Toolbar from './Toolbar.vue';
 import EditModal from './EditModal.vue';
-
+import CustomEdge from './CustomEdge.vue';
 // 导入 ChainNode 和新的 TextNode
 import ChainNode from './ChainNode.vue';
 import TextNode from './TextNode.vue'; // 1. 导入新的 TextNode 组件
@@ -253,7 +253,14 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown);
 });
 
-subflow.onConnect((params) => subflow.addEdges(params));
+function onSubCanvasConnect(params) {
+  const newEdge = {
+    ...params,
+    type: 'custom',
+    data: { animated: true, pathType: 'smoothstep' } // SubCanvas 中手动连接默认用 smoothstep
+  };
+  subflow.addEdges([newEdge]);
+}
 
 function toggleFreeze() {
   isFrozen.value = !isFrozen.value;
@@ -274,10 +281,6 @@ watch([subflow.nodes, subflow.edges], () => {
   });
 }, { deep: true });
 
-function handleNodeDoubleClick(nodeId) {
-  editingNode.value = subflow.findNode(nodeId);
-  isEditModalVisible.value = true;
-}
 
 function handleNodeSave(event) {
   const node = subflow.findNode(event.id);
@@ -337,6 +340,7 @@ function generateNodeChain(nodeDataList) {
       sourceHandle: 'right',
       targetHandle: 'left',
       type: 'custom',
+      data: { animated: true, pathType: 'bezier' } 
     };
     newEdges.push(newEdge);
   }
@@ -425,13 +429,14 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
         const data = await response.json();
         
         // 使用正则表达式去除每个字符串中的 [], {} 符号
-        const rationaleList = data.rationale.map(item => item.replace(/[\[\]{}]/g, ''));
+        //.map(item => item.text.replace(/[\[\]{}]/g, ''))
+        const rationaleList = data.rationale;
         if (!Array.isArray(rationaleList) || rationaleList.length === 0) {
             console.log("API did not return a valid list of rationales.");
             return;
         }
 
-        // --- 新增：为新节点动态计算一个合适的初始高度 ---
+        
         const headerHeight = 35;      // 节点头部的大约高度
         const itemPaddingY = 24;      // 每个文本块上下的内边距总和
         const itemGapY = 8;           // 文本块之间的间距
@@ -556,6 +561,9 @@ async function handleSubCanvasRun() {
     isSubCanvasRunning.value = false;
   }
 }
+function onEdgeDeleteInSubCanvas(edgeId) {
+    subflow.removeEdges([edgeId]);
+}
 
 const subCanvasEl = ref(null);
 const isDragging = ref(false);
@@ -627,7 +635,16 @@ onUnmounted(() => {
         </div>
       </div>
       <div class="sub-canvas-content">
-        <VueFlow :id="props.nodeId" v-model:nodes="nodes" v-model:edges="edges" :fit-view-on-init="true" class="sub-flow" ref="vueFlowRef">
+        <VueFlow 
+        :id="props.nodeId" 
+        v-model:nodes="nodes" 
+        v-model:edges="edges" 
+        :fit-view-on-init="true" 
+        class="sub-flow" 
+        ref="vueFlowRef"
+        @connect="onSubCanvasConnect"
+        
+        >
           
           <!-- ChainNode 模板 -->
           <template #node-chain="chainProps">
@@ -640,9 +657,9 @@ onUnmounted(() => {
             />
           </template>
 
-          <!-- ================================================================= -->
-          <!-- 3. 注册新的 TextNode 组件模板 -->
-          <!-- ================================================================= -->
+          <template #edge-custom="props">
+              <CustomEdge v-bind="props" @delete-edge="onEdgeDeleteInSubCanvas" />
+          </template>
           <template #node-text="textProps">
             <TextNode
               v-bind="textProps"

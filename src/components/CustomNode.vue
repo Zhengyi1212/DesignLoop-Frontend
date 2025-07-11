@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, nextTick } from 'vue';
+import { computed, ref, nextTick, watch } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
@@ -10,7 +10,7 @@ const props = defineProps({
 });
 
 // MODIFIED: Add 'snapshot-dropped' to the list of emitted events.
-const emit = defineEmits(['delete', 'open-canvas', 'update-node-data', 'snapshot-dropped']);
+const emit = defineEmits(['delete', 'open-canvas', 'update-node-data', 'snapshot-dropped','content-changed']);
 
 // --- In-place Editing Logic (Unchanged) ---
 const isEditingTitle = ref(false);
@@ -103,6 +103,16 @@ function onOpenCanvas() {
   if (props.id === 'ghost-node') return;
   emit('open-canvas', props.id);
 }
+
+watch(() => props.data.content, (newValue, oldValue) => {
+  // 仅当内容实际发生有意义的改变时才触发
+  // 这可以防止初始加载或无意义的重渲染触发事件
+  if (newValue !== oldValue && oldValue !== undefined) {
+    emit('content-changed', props.id);
+  }
+}, {
+  deep: true // 深度监听以处理复杂内容
+});
 </script>
 
 <template>

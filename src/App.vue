@@ -425,25 +425,66 @@ onUnmounted(() => {
   window.removeEventListener('mousemove', doResize);
   window.removeEventListener('mouseup', stopResize);
 });
+
 onBeforeUnmount(() => {
   const flowElement = vueFlowRef.value?.$el;
   if (flowElement) {
     flowElement.removeEventListener('click', placeNodeOnClick, true);
   }
 });
+
 function isValidConnection(connection) { return connection.source !== connection.target; }
+
+
 function onConnect(connection) {
   const sourceNode = findNode(connection.source);
   const targetNode = findNode(connection.target);
   if (!sourceNode || !targetNode) return;
   const newEdgeId = `edge--${connection.source}(${connection.sourceHandle})--${connection.target}(${connection.targetHandle})--${Date.now()}`;
-  const newEdge = { ...connection, id: newEdgeId, type: 'custom', interactionWidth: 30, selectable: true };
+  const newEdge = { 
+    ...connection, 
+    id: newEdgeId, 
+    type: 'custom', 
+    interactionWidth: 30, 
+    selectable: true,
+    // 新增 data 对象，设置默认动画状态
+    data: { animated: true, pathType: 'bezier' } 
+  };
   if (!sourceNode.data.connections.out) sourceNode.data.connections.out = [];
   sourceNode.data.connections.out.push({ edgeId: newEdge.id, targetId: connection.target, sourceHandle: connection.sourceHandle });
   if (!targetNode.data.connections.in) targetNode.data.connections.in = [];
   targetNode.data.connections.in.push({ edgeId: newEdge.id, sourceId: connection.source, targetHandle: connection.targetHandle });
   addEdges([newEdge]);
 }
+function handleContentChanged(sourceNodeId) {
+  const edgeToUpdate = edges.value.find(edge => {
+    if (edge.source !== sourceNodeId) return false;
+    const targetNode = findNode(edge.target);
+    return targetNode && targetNode.type === 'run';
+  });
+
+  if (edgeToUpdate) {
+    // 如果 data 对象不存在，先创建它
+    if (!edgeToUpdate.data) edgeToUpdate.data = {};
+    edgeToUpdate.data.animated = false;
+    console.log(`Edge ${edgeToUpdate.id} animation turned OFF.`);
+  }
+}
+
+function handleRunTriggered(targetNodeId) {
+  const edgeToUpdate = edges.value.find(edge => {
+    if (edge.target !== targetNodeId) return false;
+    const sourceNode = findNode(edge.source);
+    return sourceNode && sourceNode.type === 'custom';
+  });
+
+  if (edgeToUpdate) {
+    if (!edgeToUpdate.data) edgeToUpdate.data = {};
+    edgeToUpdate.data.animated = true;
+    console.log(`Edge ${edgeToUpdate.id} animation turned ON.`);
+  }
+}
+
 function removeConnectionData(edge) {
   if (!edge) return;
   const sourceNode = findNode(edge.source);
@@ -457,11 +498,13 @@ function removeConnectionData(edge) {
     if (inIndex !== -1) targetNode.data.connections.in.splice(inIndex, 1);
   }
 }
+
 function onEdgeDelete(edgeId) {
   const edgeToRemove = edges.value.find(edge => edge.id === edgeId);
   removeConnectionData(edgeToRemove);
   removeEdges([edgeId]);
 }
+
 function onEdgesChange(changes) {
   const removedChanges = changes.filter(change => change.type === 'remove');
   removedChanges.forEach(removedChange => {
@@ -670,6 +713,7 @@ function handleDeleteSnapshot(snapshotIdToDelete) {
             @open-canvas="handleOpenSubCanvas"
             @update-node-data="handleNodeUpdate"
             @snapshot-dropped="handleApplySnapshot"
+            @content-changed="handleContentChanged" 
           />
         </template>
         
@@ -682,6 +726,7 @@ function handleDeleteSnapshot(snapshotIdToDelete) {
             @update-node-data="handleNodeUpdate"
             :is-running="props.id === runningNodeId"
             @snapshot-dropped="handleApplySnapshot"
+            @run-triggered="handleRunTriggered"
           />
         </template>
 

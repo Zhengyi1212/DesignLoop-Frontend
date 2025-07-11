@@ -11,7 +11,7 @@ const props = defineProps({
 });
 
 // MODIFIED: Add 'snapshot-dropped' to the list of emitted events.
-const emit = defineEmits(['delete', 'open-canvas', 'run-node', 'update-node-data', 'snapshot-dropped']);
+const emit = defineEmits(['delete', 'open-canvas', 'run-node', 'update-node-data', 'run-triggered']);
 
 // --- In-place Editing Logic (Unchanged) ---
 const isEditingTitle = ref(false);
@@ -47,7 +47,7 @@ function saveChanges() {
   isEditingTitle.value = false;
   isEditingContent.value = false;
 }
-
+/*
 // --- NEW: Drag and Drop Snapshot Logic ---
 const isDraggingOver = ref(false);
 
@@ -63,9 +63,10 @@ function onDragOver(event) {
 function onDragLeave() {
   isDraggingOver.value = false;
 }
+*/
+/*function onDrop(event) 
 
-function onDrop(event) {
-  event.preventDefault();
+  //event.preventDefault();
   isDraggingOver.value = false;
   
   const snapshotDataString = event.dataTransfer.getData('application/json/snapshot');
@@ -79,6 +80,7 @@ function onDrop(event) {
     console.error("Failed to parse snapshot data on drop:", e);
   }
 }
+*/
 
 // --- Component Specific Logic & Handlers (Unchanged) ---
 const nodeHeaderStyle = computed(() => {
@@ -100,15 +102,16 @@ const nodeSelectionStyle = computed(() => {
 function onDelete() {
   emit('delete', props.id);
 }
-
-function onOpenCanvas() {
-  if (isEditingTitle.value || isEditingContent.value) return;
-  if (props.id === 'ghost-node') return;
-  emit('open-canvas', props.id);
-}
+//*
+//function onOpenCanvas() {
+  //if (isEditingTitle.value || isEditingContent.value) return;
+  //if (props.id === 'ghost-node') return;
+  //emit('open-canvas', props.id);
+//}
 
 function onRun() {
   if (props.isRunning) return;
+  emit('run-triggered', props.id);
   emit('run-node', props.id);
 }
 </script>
@@ -124,7 +127,7 @@ function onRun() {
       id === 'ghost-node' ? { pointerEvents: 'none' } : {},
       nodeSelectionStyle
     ]"
-    @dblclick="onOpenCanvas"
+   
     @dragover.prevent="onDragOver"
     @dragleave="onDragLeave"
     @drop="onDrop"

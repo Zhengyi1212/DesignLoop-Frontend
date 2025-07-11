@@ -6,9 +6,11 @@ import { Controls } from '@vue-flow/controls';
 import Toolbar from './Toolbar.vue';
 import EditModal from './EditModal.vue';
 
+// 导入 ChainNode 和新的 TextNode
 import ChainNode from './ChainNode.vue';
+import TextNode from './TextNode.vue'; // 1. 导入新的 TextNode 组件
 
-const TEXT_NODE_OFFSET_Y = -120;
+const TEXT_NODE_OFFSET_Y = -120; // 调整偏移量以适应新节点
 
 const props = defineProps({
   nodeId: { type: String, required: true },
@@ -31,7 +33,7 @@ const editingNode = ref(null);
 const isFrozen = ref(false);
 const nodes = ref(props.initialNodes);
 const edges = ref(props.initialEdges);
-let subNodeIdCounter = 0;
+let subNodeIdCounter = ref(props.initialNodes.length); // 初始化计数器
 const isAddingNode = ref(false);
 const isShowingRunNode = ref(false);
 const vueFlowRef = ref(null);
@@ -48,6 +50,44 @@ const newNodeColor = ref('#ffffff');
 const isGeneratingRationaleNodeId = ref(null);
 
 const subflow = useVueFlow({ id: props.nodeId });
+
+// 新增：处理从 TextNode 传来的 rationales 更新
+function handleRationalesUpdate({ nodeId, newRationales }) {
+  const node = subflow.findNode(nodeId);
+  if (node) {
+    node.data.rationales = newRationales;
+    console.log(`TextNode ${nodeId} rationales updated.`);
+  }
+}
+
+// 新增：处理从 TextNode 创建新 ChainNode 的逻辑
+function handleCreateNodeFromText(text, sourceTextNode) {
+  if (!text || !sourceTextNode) return;
+
+  const { position, dimensions } = sourceTextNode;
+  const nodeWidth = dimensions?.width || 250; // TextNode 的宽度
+
+  const newNode = {
+    id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
+    type: 'chain',
+    position: {
+      x: position.x + nodeWidth + 60, // 放置在 TextNode 右侧
+      y: position.y,
+    },
+    width: 120,
+    height: 80,
+    data: {
+      content: text, // 使用传递过来的文本
+      color: newNodeColor.value,
+      connections: { in: [], out: [] },
+      subGraph: { nodes: [], edges: [] },
+      isManual: true, // 标记为手动创建
+    },
+  };
+  subflow.addNodes([newNode]);
+  console.log('Created new ChainNode from TextNode with content:', text);
+}
+
 
 function handleChainNodeContentUpdate({ id, content }) {
   const node = subflow.findNode(id);
@@ -67,7 +107,7 @@ async function handleSaveButton() {
 
     const textNodeIds = new Set(
       allNodes
-        .filter(n => n.id.startsWith('sub-text-node-'))
+        .filter(n => n.type === 'text') // 过滤 TextNode
         .map(n => n.id)
     );
 
@@ -108,7 +148,7 @@ function placeNodeOnClick(event) {
   if (!ghostNode) return;
 
   const newNode = {
-    id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter++}`,
+    id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
     type: 'chain',
     position: { ...ghostNode.position },
     width: 120,
@@ -147,8 +187,8 @@ subflow.onPaneMouseMove((event) => {
   };
   const position = subflow.project(relativeMousePos);
   const adjustedPosition = {
-    x: position.x - 100,
-    y: position.y - 50,
+    x: position.x - 60,
+    y: position.y - 40,
   };
   const ghostNode = subflow.findNode('ghost-node');
   if (ghostNode) {
@@ -170,7 +210,6 @@ subflow.onPaneMouseMove((event) => {
   }
 });
 
-// ✅ 包含了大小修复的最终函数
 function handleDuplicateSubNode() {
   const selectedNodes = subflow.getSelectedNodes.value;
   if (selectedNodes.length !== 1) return;
@@ -178,13 +217,12 @@ function handleDuplicateSubNode() {
   if (originalNode.id === 'ghost-node') return;
 
   const newNode = {
-    id: `sub-node-${props.nodeId}-${subNodeIdCounter++}`,
+    id: `sub-node-${props.nodeId}-${subNodeIdCounter.value++}`,
     type: originalNode.type,
     position: {
       x: originalNode.position.x + 60,
       y: originalNode.position.y + 40,
     },
-    // 复制节点的尺寸信息，同时兼容 style 对象和 width/height 属性
     width: originalNode.width,
     height: originalNode.height,
     style: originalNode.style ? { ...originalNode.style } : undefined,
@@ -196,7 +234,6 @@ function handleDuplicateSubNode() {
   subflow.addNodes([newNode]);
 }
 
-// ✅ 移除了不再需要的 stopImmediatePropagation
 function handleKeyDown(event) {
   if ((event.ctrlKey || event.metaKey) && event.key === 'd') {
     event.preventDefault();
@@ -265,14 +302,9 @@ function generateNodeChain(nodeDataList) {
     console.error("[SubCanvas] Vue Flow instance (subflow) is not available!");
     return;
   }
-
   if (!Array.isArray(nodeDataList) || nodeDataList.length === 0) {
-    console.log("[SubCanvas] nodeDataList is empty, skipping new chain generation.");
     return;
   }
-  
-  console.log("[SubCanvas] Generating new chain with data:", nodeDataList);
-
   const newNodes = [];
   const newEdges = [];
   const startX = 100;
@@ -282,10 +314,11 @@ function generateNodeChain(nodeDataList) {
   nodeDataList.forEach((element, index) => {
     const content = element || '';
     const newNode = {
-      id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter++}`,
+      id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
       type: 'chain',
       position: { x: startX + index * gapX, y: startY },
-      style: { width: '120px', height: '80px' },
+      width: 120,
+      height: 80,
       data: {
         content: content,
         connections: { in: [], out: [] },
@@ -304,73 +337,68 @@ function generateNodeChain(nodeDataList) {
       sourceHandle: 'right',
       targetHandle: 'left',
       type: 'custom',
-      selectable: true,
-      interactionWidth: 40,
     };
     newEdges.push(newEdge);
   }
-  
-  console.log("[SubCanvas] Adding new nodes:", newNodes);
-  console.log("[SubCanvas] Adding new edges:", newEdges);
-
   subflow.addNodes(newNodes);
   subflow.addEdges(newEdges);
 }
+
 function findDirectPredecessorsWithText(startNodeId, allNodes, allEdges) {
-  
-  const directPredecessors = [];
-  for (const edge of allEdges) {
-    if (edge.target === startNodeId) {
-      const predNode = allNodes.find(n => n.id === edge.source);
-      if (predNode && !predNode.data.isTextNode) {
-        directPredecessors.push(predNode);
-      }
-    }
-  }
-
-  if (directPredecessors.length === 0) {
-    return [];
-  }
-
-  const results = directPredecessors.map(predNode => {
-    let foundTextNodeContent = ''; 
-
+    const directPredecessors = [];
     for (const edge of allEdges) {
-      let connectedNodeId = null;
-
-      if (edge.source === predNode.id) {
-        connectedNodeId = edge.target;
-      } else if (edge.target === predNode.id) {
-        connectedNodeId = edge.source;
-      }
-      
-      if (connectedNodeId && connectedNodeId !== startNodeId) {
-        const connectedNode = allNodes.find(n => n.id === connectedNodeId);
-        
-        if (connectedNode && connectedNode.data.isTextNode) {
-          foundTextNodeContent = connectedNode.data.content || '';
-          break;
+        if (edge.target === startNodeId) {
+            const predNode = allNodes.find(n => n.id === edge.source);
+            if (predNode && predNode.type !== 'text') { // 确保前驱不是 TextNode
+                directPredecessors.push(predNode);
+            }
         }
-      }
     }
 
-    return {
-      node_content: predNode.data.content,
-      text_content: foundTextNodeContent,
-    };
-  });
+    if (directPredecessors.length === 0) {
+        return [];
+    }
 
-  return results;
+    const results = directPredecessors.map(predNode => {
+        let foundTextNodeContent = '';
+        // 寻找与前驱节点直接相连的 TextNode
+        for (const edge of allEdges) {
+            let connectedNodeId = null;
+            if (edge.source === predNode.id) {
+                connectedNodeId = edge.target;
+            } else if (edge.target === predNode.id) {
+                connectedNodeId = edge.source;
+            }
+            
+            if (connectedNodeId && connectedNodeId !== startNodeId) {
+                const connectedNode = allNodes.find(n => n.id === connectedNodeId);
+                // 检查连接的节点是否是我们想要的 TextNode
+                if (connectedNode && connectedNode.type === 'text') {
+                    // 由于 TextNode 的内容是数组，这里我们先返回一个提示
+                    foundTextNodeContent = `[Rationale List with ${connectedNode.data.rationales?.length || 0} items]`;
+                    break;
+                }
+            }
+        }
+        return {
+            node_content: predNode.data.content,
+            text_content: foundTextNodeContent,
+        };
+    });
+    return results;
 }
 
+
+// =================================================================
+// 2. 重构 handleGenerateTextNode 函数
+// =================================================================
 async function handleGenerateTextNode({ sourceNodeId, position }) {
     const sourceNode = subflow.findNode(sourceNodeId);
     if (!sourceNode || isGeneratingRationaleNodeId.value) return;
 
     isGeneratingRationaleNodeId.value = sourceNodeId;
     try {
-        const predecessors = findDirectPredecessorsWithText(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value)
-        console.log(predecessors[0])
+        const predecessors = findDirectPredecessorsWithText(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value);
         const formattedChain = (chainList.value || []).map(item => ({ content: item }));
         const payload = {
             parent_node_title: props.parentNodeTitle,
@@ -378,10 +406,10 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             goal: goal.value,
             instruction: instruction.value,
             current_node_content: sourceNode.data.content,
-            chain: formattedChain, 
+            chain: formattedChain,
             predecessor_chain: predecessors,
             design_background: props.designBackground,
-            design_goal:props.designGoal
+            design_goal: props.designGoal
         };
 
         const response = await fetch('http://localhost:7001/generate-rationale', {
@@ -391,43 +419,67 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch rationale or parse error response.' }));
-            const readableError = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail, null, 2);
-            throw new Error(readableError);
+            const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch' }));
+            throw new Error(errorData.detail);
         }
         const data = await response.json();
-        const rationaleContent = data.rationale || 'No rationale provided.';
+        
+        // 使用正则表达式去除每个字符串中的 [], {} 符号
+        const rationaleList = data.rationale.map(item => item.replace(/[\[\]{}]/g, ''));
+        if (!Array.isArray(rationaleList) || rationaleList.length === 0) {
+            console.log("API did not return a valid list of rationales.");
+            return;
+        }
 
-        const existingTextNodeId = sourceNode.data.generatedContentNodeId;
+        // --- 新增：为新节点动态计算一个合适的初始高度 ---
+        const headerHeight = 35;      // 节点头部的大约高度
+        const itemPaddingY = 24;      // 每个文本块上下的内边距总和
+        const itemGapY = 8;           // 文本块之间的间距
+        const avgCharsPerLine = 35;   // 在当前宽度下，每行大约能容纳的字符数
+        const lineHeight = 16;        // 文本行高
+
+        let totalContentHeight = 0;
+        rationaleList.forEach(text => {
+            const lineCount = Math.ceil((text.length || 1) / avgCharsPerLine);
+            totalContentHeight += (lineCount * lineHeight) + itemPaddingY + itemGapY;
+        });
+        
+        // 最终高度 = 头部高度 + 内容总高度，并设置一个最大和最小限制
+        const calculatedHeight = headerHeight + totalContentHeight;
+        const finalHeight = Math.min(Math.max(calculatedHeight, 150), 500); // 最小150px, 最大500px
+
+
+        const existingTextNodeId = sourceNode.data.generatedRationaleNodeId;
         const existingTextNode = existingTextNodeId ? subflow.findNode(existingTextNodeId) : null;
 
         if (existingTextNode) {
-            existingTextNode.data.content = rationaleContent;
+            // 如果已存在 TextNode，则更新其内容和高度
+            existingTextNode.data.rationales = rationaleList;
+            existingTextNode.dimensions.height = finalHeight;
         } else {
-            const contentNode = {
-                id: `sub-text-node-${props.nodeId}-${subNodeIdCounter++}`,
-                type: 'chain',
-                position: { x: position.x - 50, y: position.y + TEXT_NODE_OFFSET_Y - 50, },
-                width: 120,
-                height: 80,
+            // 如果不存在，则创建一个新的 TextNode 容器
+            const newTextNode = {
+                id: `sub-text-node-${props.nodeId}-${subNodeIdCounter.value++}`,
+                type: 'text', // 使用新的节点类型 'text'
+                position: { x: position.x, y: position.y + TEXT_NODE_OFFSET_Y },
+                width: 250,
+                height: finalHeight, // 使用计算出的高度
                 data: {
-                    content: rationaleContent,
-                    isTextNode: true,
-                    connections: { in: [], out: [] },
-                    subGraph: { nodes: [], edges: [] },
+                    rationales: rationaleList, // 将整个列表传递给 data
                 },
             };
             const newEdge = {
-                id: `sub-content-edge-${contentNode.id}-to-${sourceNode.id}`,
-                source: contentNode.id,
+                id: `sub-content-edge-${newTextNode.id}-to-${sourceNode.id}`,
+                source: newTextNode.id,
                 target: sourceNode.id,
-                sourceHandle: 'bottom',
-                targetHandle: 'top',
-                type: 'custom',
+                sourceHandle: 'bottom', // 从 TextNode 顶部连接
+                targetHandle: 'top', // 连接到 ChainNode 底部
+                type: 'smoothstep',
                 animated: true,
             };
-            sourceNode.data.generatedContentNodeId = contentNode.id;
-            subflow.addNodes([contentNode]);
+            // 在源节点中存储新创建的 TextNode 的 ID
+            sourceNode.data.generatedRationaleNodeId = newTextNode.id;
+            subflow.addNodes([newTextNode]);
             subflow.addEdges([newEdge]);
         }
     } catch (error) {
@@ -453,27 +505,22 @@ async function handleSubCanvasRun() {
       return;
     }
 
-    console.log("[SubCanvas] Clearing previously generated nodes and edges.");
     const allNodes = subflow.getNodes.value;
     const allEdges = subflow.getEdges.value;
 
+    // 同时移除旧的 text node 和 chain node
     const nodesToRemove = allNodes.filter(n =>
-      n.type === 'chain' && (!n.data.isManual || n.data.isTextNode)
+      (n.type === 'chain' && !n.data.isManual) || n.type === 'text'
     );
 
     if (nodesToRemove.length > 0) {
         const nodeIdsToRemove = nodesToRemove.map(n => n.id);
         const edgesToRemove = allEdges.filter(e => nodeIdsToRemove.includes(e.source) || nodeIdsToRemove.includes(e.target));
         
-        console.log("[SubCanvas] Removing edge IDs:", edgesToRemove.map(e => e.id));
-        console.log("[SubCanvas] Removing node IDs:", nodeIdsToRemove);
-        
         if (edgesToRemove.length > 0) {
           subflow.removeEdges(edgesToRemove.map(e => e.id));
         }
         subflow.removeNodes(nodeIdsToRemove);
-    } else {
-        console.log("[SubCanvas] No auto-generated nodes found to clear.");
     }
 
     const url = "http://localhost:7001/generate-thinking-chain";
@@ -500,7 +547,6 @@ async function handleSubCanvasRun() {
     const data = await response.json();
     
     chainList.value = data.chain;
-    console.log("chainList:", chainList)
     generateNodeChain(data.chain);
 
   } catch (error) {
@@ -583,6 +629,7 @@ onUnmounted(() => {
       <div class="sub-canvas-content">
         <VueFlow :id="props.nodeId" v-model:nodes="nodes" v-model:edges="edges" :fit-view-on-init="true" class="sub-flow" ref="vueFlowRef">
           
+          <!-- ChainNode 模板 -->
           <template #node-chain="chainProps">
             <ChainNode
               v-bind="chainProps"
@@ -590,6 +637,17 @@ onUnmounted(() => {
               @add-text-node="handleGenerateTextNode"
               @update-content="handleChainNodeContentUpdate"
               :is-generating-rationale="isGeneratingRationaleNodeId === chainProps.id"
+            />
+          </template>
+
+          <!-- ================================================================= -->
+          <!-- 3. 注册新的 TextNode 组件模板 -->
+          <!-- ================================================================= -->
+          <template #node-text="textProps">
+            <TextNode
+              v-bind="textProps"
+              @update:rationales="handleRationalesUpdate"
+              @create-node-from-text="handleCreateNodeFromText($event, textProps)"
             />
           </template>
 

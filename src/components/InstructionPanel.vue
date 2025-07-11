@@ -203,7 +203,7 @@ function onGenerate() {
   font-size: 16px;
   font-weight: bold;
   color: white;
-  background-color: #38a169;
+  background-color: #5661F6;
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -214,7 +214,7 @@ function onGenerate() {
   min-height: 44px;
 }
 .generate-btn:hover:not(:disabled) {
-  background-color: #2f855a;
+  background-color: #1625f3;
 }
 .generate-btn:disabled,
 .fetch-btn:disabled {

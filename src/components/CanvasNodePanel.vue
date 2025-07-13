@@ -17,39 +17,53 @@ const getRandomColor = () => {
 
 <template>
   <div class="canvas-node-panel">
-    <h3 class="panel-title">
-
-      LLM Chains
-    </h3>
+    <h3 class="panel-title">LLM Chains</h3>
     <div v-if="snapshots.length === 0" class="empty-state">
       <p>No LLM chain saved yet.</p>
-
     </div>
     <div v-else class="snapshots-list">
-      <div v-for="snapshot in snapshots" 
-      :key="snapshot.id" class="snapshot-item" 
-      draggable="true"
-      @dragstart="onDragStart($event, snapshot)" 
-      title="Drag to a node on the canvas"
-      :style="{ backgroundColor: getRandomColor() }"
-      >
+      <div 
+        v-for="snapshot in snapshots" 
+        :key="snapshot.id" 
+        class="snapshot-item" 
+        draggable="true"
+        @dragstart="onDragStart($event, snapshot)" 
+        @dblclick="emit('show-details', snapshot)" 
+        title="Drag to apply, Double-click for details"
         
+        :style="{ backgroundColor: getRandomColor() }"
+      >
         <div class="snapshot-info">
+          
+          <div class="snapshot-parent-title">
+            From: {{ snapshot.parentNodeTitle || 'Unlinked' }}
+          </div>
           <div class="snapshot-goal">Goal: {{ snapshot.goal }}</div>
           <div class="snapshot-goal">Instruction: {{ snapshot.data.instruction }}</div>
           <div class="snapshot-id">ID: {{ snapshot.id }}</div>
-          
-          
         </div>
-        <button class="delete-button" @click.stop="emit('delete-snapshot', snapshot.id)" title="Delete this chain">
+        <button 
+          class="delete-button" 
+          @click.stop="emit('delete-snapshot', snapshot.id)" 
+          title="Delete this chain"
+        >
           ×
         </button>
       </div>
     </div>
   </div>
 </template>
-
 <style scoped>
+
+.snapshot-parent-title {
+  font-weight: bold;
+  color: #0056b3; /* A distinct color */
+  font-size: 11px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .canvas-node-panel {
   flex-grow: 1;
   display: flex;

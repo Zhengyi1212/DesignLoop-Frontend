@@ -134,8 +134,8 @@ function onRun() {
   >
     <NodeResizer
       v-if="id !== 'ghost-node'"
-      :min-width="200"
-      :min-height="200"
+      :min-width="180"
+      :min-height="180"
       :visible="selected"
       line-class-name="resizer-line"
       handle-class-name="resizer-handle"
@@ -312,6 +312,8 @@ function onRun() {
 }
 :deep(.vue-flow__handle) {
   background-color: #9e9e9e;
+  width: 12px;
+  height: 12px;
 }
 .run-node .vue-flow__handle-top,
 .run-node .vue-flow__handle-bottom {

@@ -26,11 +26,11 @@ function handleInput(event, index) {
 }
 
 function onFetchPipeline() {
-    emit('fetch-pipeline');
+    emit('fetch-pipeline', { event });
 }
 
 function onGenerate() {
-  emit('generate');
+  emit('generate', { event });
 }
 </script>
 
@@ -52,7 +52,7 @@ function onGenerate() {
           <h3>{{ panel.title }}</h3>
           <button 
             v-if="panel.title === 'Pipeline'" 
-            @click="onFetchPipeline" 
+            @click="onFetchPipeline($event)" 
             class="fetch-btn" 
             :disabled="isFetchingPipeline"
             title="Fetch pipeline suggestion"
@@ -67,13 +67,13 @@ function onGenerate() {
           @input="handleInput($event, index)"
           :placeholder="`Enter ${panel.title}...`"
           @keydown.ctrl.z.stop
-  @keydown.meta.z.stop
+          @keydown.meta.z.stop
         ></textarea>
       </div>
     </div>
     
     <div class="panel-footer">
-      <button class="generate-btn" @click="onGenerate" :disabled="isGenerating">
+      <button class="generate-btn" @click="onGenerate($event)" :disabled="isGenerating">
         <div v-if="isGenerating" class="spinner"></div>
         <span v-else>Generate</span>
       </button>

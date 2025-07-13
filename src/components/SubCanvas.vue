@@ -1,16 +1,18 @@
 <script setup>
-import { ref, watch, onUnmounted, onBeforeUnmount, onMounted } from 'vue';
+import { ref, watch, onUnmounted, onBeforeUnmount, onMounted, defineAsyncComponent } from 'vue';
 import { VueFlow, useVueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import Toolbar from './Toolbar.vue';
 import EditModal from './EditModal.vue';
 import CustomEdge from './CustomEdge.vue';
-// 导入 ChainNode 和新的 TextNode
 import ChainNode from './ChainNode.vue';
-import TextNode from './TextNode.vue'; // 1. 导入新的 TextNode 组件
+import TextNode from './TextNode.vue';
 
-const TEXT_NODE_OFFSET_Y = -120; // 调整偏移量以适应新节点
+// 1. 导入 RatingNode 组件
+const RatingNode = defineAsyncComponent(() => import('./RatingNode.vue'));
+
+const TEXT_NODE_OFFSET_Y = -120;
 
 const props = defineProps({
   nodeId: { type: String, required: true },
@@ -33,7 +35,7 @@ const editingNode = ref(null);
 const isFrozen = ref(false);
 const nodes = ref(props.initialNodes);
 const edges = ref(props.initialEdges);
-let subNodeIdCounter = ref(props.initialNodes.length); // 初始化计数器
+let subNodeIdCounter = ref(props.initialNodes.length);
 const isAddingNode = ref(false);
 const isShowingRunNode = ref(false);
 const vueFlowRef = ref(null);
@@ -44,48 +46,46 @@ const goal = ref(props.parentNodeGoal || '');
 const isSubCanvasRunning = ref(false);
 const isSaveButtonRunning = ref(false)
 const runningSubNodeId = ref(null);
-
+const runBtnRef = ref(null);
 const newNodeColor = ref('#ffffff');
 
 const isGeneratingRationaleNodeId = ref(null);
 
 const subflow = useVueFlow({ id: props.nodeId });
 
-// 新增：处理从 TextNode 传来的 rationales 更新
+// 2. 添加处理反馈节点事件的方法
+function handleRatingClose(nodeId) {
+  subflow.removeNodes([nodeId]);
+}
+
+function handleRatingSubmit(payload) {
+  console.log('Submitting rating from SubCanvas to backend:', payload);
+  subflow.removeNodes([payload.nodeId]);
+}
+
+
+// --- Other functions (unchanged) ---
+
 function handleRationalesUpdate({ nodeId, newRationales }) {
   const node = subflow.findNode(nodeId);
   if (node) {
     node.data.rationales = newRationales;
-    console.log(`TextNode ${nodeId} rationales updated.`);
   }
 }
 
-// 新增：处理从 TextNode 创建新 ChainNode 的逻辑
 function handleCreateNodeFromText(text, sourceTextNode) {
   if (!text || !sourceTextNode) return;
-
   const { position, dimensions } = sourceTextNode;
-  const nodeWidth = dimensions?.width || 250; // TextNode 的宽度
-
+  const nodeWidth = dimensions?.width || 250;
   const newNode = {
     id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
     type: 'chain',
-    position: {
-      x: position.x + nodeWidth + 60, // 放置在 TextNode 右侧
-      y: position.y,
-    },
+    position: { x: position.x + nodeWidth + 60, y: position.y },
     width: 120,
     height: 80,
-    data: {
-      content: text, // 使用传递过来的文本
-      color: newNodeColor.value,
-      connections: { in: [], out: [] },
-      subGraph: { nodes: [], edges: [] },
-      isManual: true, // 标记为手动创建
-    },
+    data: { content: text, color: newNodeColor.value, connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] }, isManual: true },
   };
   subflow.addNodes([newNode]);
-  console.log('Created new ChainNode from TextNode with content:', text);
 }
 
 
@@ -93,33 +93,22 @@ function handleChainNodeContentUpdate({ id, content }) {
   const node = subflow.findNode(id);
   if (node) {
     node.data.content = content;
-    console.log(`Node ${id} content updated.`);
   }
 }
 
 async function handleSaveButton() {
   if (isSaveButtonRunning.value) return;
   isSaveButtonRunning.value = true;
-
   try {
     const allNodes = subflow.getNodes.value;
     const allEdges = subflow.getEdges.value;
-
-    const textNodeIds = new Set(
-      allNodes
-        .filter(n => n.type === 'text') // 过滤 TextNode
-        .map(n => n.id)
-    );
-
-    const nodesForSnapshot = allNodes.filter(n =>
-      n.id !== 'ghost-node' && !textNodeIds.has(n.id)
-    );
-
-    const edgesForSnapshot = allEdges.filter(e =>
-      !textNodeIds.has(e.source) && !textNodeIds.has(e.target)
-    );
-
+    const textNodeIds = new Set(allNodes.filter(n => n.type === 'text').map(n => n.id));
+    const nodesForSnapshot = allNodes.filter(n => n.id !== 'ghost-node' && !textNodeIds.has(n.id) && n.type !== 'rating');
+    const edgesForSnapshot = allEdges.filter(e => !textNodeIds.has(e.source) && !textNodeIds.has(e.target));
     const snapshotPayload = {
+      // Add parentNodeId and parentNodeTitle to the payload
+      parentNodeId: props.nodeId,
+      parentNodeTitle: props.parentNodeTitle, 
       title: `Version of: ${goal.value || 'Untitled'}`,
       data: {
         instruction: instruction.value,
@@ -131,8 +120,8 @@ async function handleSaveButton() {
         }
       }
     };
+
     emit('save-snapshot', snapshotPayload);
-    console.log('Sub-canvas state snapshot emitted successfully!');
   } catch (error) {
     console.error("Error creating sub-canvas snapshot:", error);
   } finally {
@@ -141,25 +130,16 @@ async function handleSaveButton() {
 }
 
 function placeNodeOnClick(event) {
-  if (!isAddingNode.value || event.target.closest('.vue-flow__controls, .tool-button')) {
-    return;
-  }
+  if (!isAddingNode.value || event.target.closest('.vue-flow__controls, .tool-button')) return;
   const ghostNode = subflow.findNode('ghost-node');
   if (!ghostNode) return;
-
   const newNode = {
     id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
     type: 'chain',
     position: { ...ghostNode.position },
     width: 120,
     height: 80,
-    data: {
-      content: '',
-      color: newNodeColor.value,
-      connections: { in: [], out: [] },
-      subGraph: { nodes: [], edges: [] },
-      isManual: true,
-    },
+    data: { content: '', color: newNodeColor.value, connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] }, isManual: true },
   };
   subflow.addNodes([newNode]);
   toggleAddNodeMode();
@@ -169,7 +149,6 @@ function toggleAddNodeMode() {
   isAddingNode.value = !isAddingNode.value;
   const flowElement = vueFlowRef.value?.$el;
   if (!flowElement) return;
-
   if (isAddingNode.value) {
     flowElement.addEventListener('click', placeNodeOnClick, true);
   } else {
@@ -181,31 +160,17 @@ function toggleAddNodeMode() {
 subflow.onPaneMouseMove((event) => {
   if (!isAddingNode.value) return;
   const flowRect = vueFlowRef.value.$el.getBoundingClientRect();
-  const relativeMousePos = {
-    x: event.clientX - flowRect.left,
-    y: event.clientY - flowRect.top,
-  };
+  const relativeMousePos = { x: event.clientX - flowRect.left, y: event.clientY - flowRect.top };
   const position = subflow.project(relativeMousePos);
-  const adjustedPosition = {
-    x: position.x - 60,
-    y: position.y - 40,
-  };
+  const adjustedPosition = { x: position.x - 60, y: position.y - 40 };
   const ghostNode = subflow.findNode('ghost-node');
   if (ghostNode) {
     ghostNode.position = adjustedPosition;
     ghostNode.data.color = newNodeColor.value;
   } else {
     subflow.addNodes([{
-      id: 'ghost-node',
-      type: 'chain',
-      position: adjustedPosition,
-      width: 120,
-      height: 80,
-      data: {
-        content: 'Click to place',
-        color: newNodeColor.value
-      },
-      class: 'ghost-node',
+      id: 'ghost-node', type: 'chain', position: adjustedPosition, width: 120, height: 80,
+      data: { content: 'Click to place', color: newNodeColor.value }, class: 'ghost-node',
     }]);
   }
 });
@@ -215,21 +180,13 @@ function handleDuplicateSubNode() {
   if (selectedNodes.length !== 1) return;
   const originalNode = selectedNodes[0];
   if (originalNode.id === 'ghost-node') return;
-
   const newNode = {
     id: `sub-node-${props.nodeId}-${subNodeIdCounter.value++}`,
     type: originalNode.type,
-    position: {
-      x: originalNode.position.x + 60,
-      y: originalNode.position.y + 40,
-    },
-    width: originalNode.width,
-    height: originalNode.height,
+    position: { x: originalNode.position.x + 60, y: originalNode.position.y + 40 },
+    width: originalNode.width, height: originalNode.height,
     style: originalNode.style ? { ...originalNode.style } : undefined,
-    data: {
-      ...JSON.parse(JSON.stringify(originalNode.data)),
-      connections: { in: [], out: [] },
-    },
+    data: { ...JSON.parse(JSON.stringify(originalNode.data)), connections: { in: [], out: [] } },
   };
   subflow.addNodes([newNode]);
 }
@@ -241,24 +198,15 @@ function handleKeyDown(event) {
   }
 }
 
-onMounted(() => {
-  window.addEventListener('keydown', handleKeyDown);
-});
-
+onMounted(() => { window.addEventListener('keydown', handleKeyDown); });
 onBeforeUnmount(() => {
   const flowElement = vueFlowRef.value?.$el;
-  if (flowElement) {
-    flowElement.removeEventListener('click', placeNodeOnClick, true);
-  }
+  if (flowElement) { flowElement.removeEventListener('click', placeNodeOnClick, true); }
   window.removeEventListener('keydown', handleKeyDown);
 });
 
 function onSubCanvasConnect(params) {
-  const newEdge = {
-    ...params,
-    type: 'custom',
-    data: { animated: true, pathType: 'smoothstep' } // SubCanvas 中手动连接默认用 smoothstep
-  };
+  const newEdge = { ...params, type: 'custom', data: { animated: true, pathType: 'smoothstep' } };
   subflow.addEdges([newEdge]);
 }
 
@@ -276,11 +224,10 @@ function toggleFreeze() {
 watch([subflow.nodes, subflow.edges], () => {
   emit('update:graph', {
     nodeId: props.nodeId,
-    nodes: subflow.getNodes.value,
+    nodes: subflow.getNodes.value.filter(n => n.type !== 'rating'), // 不保存反馈节点
     edges: subflow.getEdges.value,
   });
 }, { deep: true });
-
 
 function handleNodeSave(event) {
   const node = subflow.findNode(event.id);
@@ -301,46 +248,24 @@ function onFieldBlur() {
 }
 
 function generateNodeChain(nodeDataList) {
-  if (!subflow) {
-    console.error("[SubCanvas] Vue Flow instance (subflow) is not available!");
-    return;
-  }
-  if (!Array.isArray(nodeDataList) || nodeDataList.length === 0) {
-    return;
-  }
-  const newNodes = [];
-  const newEdges = [];
-  const startX = 100;
-  const startY = 200;
-  const gapX = 250;
-
+  if (!subflow) return;
+  if (!Array.isArray(nodeDataList) || nodeDataList.length === 0) return;
+  const newNodes = []; const newEdges = [];
+  const startX = 100; const startY = 200; const gapX = 250;
   nodeDataList.forEach((element, index) => {
     const content = element || '';
     const newNode = {
-      id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
-      type: 'chain',
-      position: { x: startX + index * gapX, y: startY },
-      width: 120,
-      height: 80,
-      data: {
-        content: content,
-        connections: { in: [], out: [] },
-      },
+      id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`, type: 'chain',
+      position: { x: startX + index * gapX, y: startY }, width: 120, height: 80,
+      data: { content: content, connections: { in: [], out: [] } },
     };
     newNodes.push(newNode);
   });
-
   for (let i = 1; i < newNodes.length; i++) {
-    const sourceNode = newNodes[i - 1];
-    const targetNode = newNodes[i];
+    const sourceNode = newNodes[i - 1]; const targetNode = newNodes[i];
     const newEdge = {
-      id: `sub-chain-edge-${sourceNode.id}-to-${targetNode.id}`,
-      source: sourceNode.id,
-      target: targetNode.id,
-      sourceHandle: 'right',
-      targetHandle: 'left',
-      type: 'custom',
-      data: { animated: true, pathType: 'bezier' } 
+      id: `sub-chain-edge-${sourceNode.id}-to-${targetNode.id}`, source: sourceNode.id, target: targetNode.id,
+      sourceHandle: 'right', targetHandle: 'left', type: 'custom', data: { animated: true, pathType: 'bezier' }
     };
     newEdges.push(newEdge);
   }
@@ -353,55 +278,38 @@ function findDirectPredecessorsWithText(startNodeId, allNodes, allEdges) {
     for (const edge of allEdges) {
         if (edge.target === startNodeId) {
             const predNode = allNodes.find(n => n.id === edge.source);
-            if (predNode && predNode.type !== 'text') { // 确保前驱不是 TextNode
+            if (predNode && predNode.type !== 'text') {
                 directPredecessors.push(predNode);
             }
         }
     }
-
-    if (directPredecessors.length === 0) {
-        return [];
-    }
-
+    if (directPredecessors.length === 0) return [];
     const results = directPredecessors.map(predNode => {
         let foundTextNodeContent = '';
-        // 寻找与前驱节点直接相连的 TextNode
         for (const edge of allEdges) {
             let connectedNodeId = null;
-            if (edge.source === predNode.id) {
-                connectedNodeId = edge.target;
-            } else if (edge.target === predNode.id) {
-                connectedNodeId = edge.source;
-            }
-            
+            if (edge.source === predNode.id) connectedNodeId = edge.target;
+            else if (edge.target === predNode.id) connectedNodeId = edge.source;
             if (connectedNodeId && connectedNodeId !== startNodeId) {
                 const connectedNode = allNodes.find(n => n.id === connectedNodeId);
-                // 检查连接的节点是否是我们想要的 TextNode
                 if (connectedNode && connectedNode.type === 'text') {
-                    // 由于 TextNode 的内容是数组，这里我们先返回一个提示
                     foundTextNodeContent = `[Rationale List with ${connectedNode.data.rationales?.length || 0} items]`;
                     break;
                 }
             }
         }
-        return {
-            node_content: predNode.data.content,
-            text_content: foundTextNodeContent,
-        };
+        return { node_content: predNode.data.content, text_content: foundTextNodeContent };
     });
     return results;
 }
 
-
-// =================================================================
-// 2. 重构 handleGenerateTextNode 函数
-// =================================================================
 async function handleGenerateTextNode({ sourceNodeId, position }) {
     const sourceNode = subflow.findNode(sourceNodeId);
     if (!sourceNode || isGeneratingRationaleNodeId.value) return;
 
     isGeneratingRationaleNodeId.value = sourceNodeId;
     try {
+        // --- 准备请求数据的部分保持不变 ---
         const predecessors = findDirectPredecessorsWithText(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value);
         const formattedChain = (chainList.value || []).map(item => ({ content: item }));
         const payload = {
@@ -423,70 +331,94 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
         });
 
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch' }));
+            const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch or parse error response' }));
             throw new Error(errorData.detail);
         }
+
         const data = await response.json();
-        
-        // 使用正则表达式去除每个字符串中的 [], {} 符号
-        //.map(item => item.text.replace(/[\[\]{}]/g, ''))
-        const rationaleList = data.rationale;
-        if (!Array.isArray(rationaleList) || rationaleList.length === 0) {
-            console.log("API did not return a valid list of rationales.");
+
+        // ✨ 1. 将整个 data.rationale 对象转换为字符串
+        const dataString = JSON.stringify(data.rationale);
+
+        // ✨ 2.【稳健版正则】定义一个可以同时匹配双引号 "..." 和单引号 '...' 的正则表达式
+        // "([^"]+)" 捕获双引号内的内容到第1组
+        // | 或
+        // '([^']+)' 捕获单引号内的内容到第2组
+        const regex = /"([^"]+)"|'([^']+)'/g;
+        let matches;
+        const extractedBlocks = [];
+
+        // ✨ 3. 循环执行匹配，找出所有符合条件的内容
+        while ((matches = regex.exec(dataString)) !== null) {
+            // 检查第1捕获组（双引号内容）或第2捕获组（单引号内容）
+            // 使用 || 操作符确保我们能取到匹配到的那个
+            const content = matches[1] || matches[2];
+            extractedBlocks.push(content);
+        }
+
+        // ✨ 4. 根据长度（大于15个字）筛选出我们真正需要的文字块
+        const rationaleList = extractedBlocks.filter(block => block.length > 15);
+
+        // ✨ 5. 检查最终列表是否为空
+        if (rationaleList.length === 0) {
+            console.warn(`No text blocks longer than 15 characters were found inside single or double quotes. Total blocks extracted: ${extractedBlocks.length}`);
             return;
         }
 
-        
-        const headerHeight = 35;      // 节点头部的大约高度
-        const itemPaddingY = 24;      // 每个文本块上下的内边距总和
-        const itemGapY = 8;           // 文本块之间的间距
-        const avgCharsPerLine = 35;   // 在当前宽度下，每行大约能容纳的字符数
-        const lineHeight = 16;        // 文本行高
 
+        // --- 后续的节点高度计算、创建/更新等逻辑保持不变 ---
+
+        const headerHeight = 35; const itemPaddingY = 24; const itemGapY = 8;
+        const avgCharsPerLine = 35; const lineHeight = 16;
         let totalContentHeight = 0;
         rationaleList.forEach(text => {
             const lineCount = Math.ceil((text.length || 1) / avgCharsPerLine);
             totalContentHeight += (lineCount * lineHeight) + itemPaddingY + itemGapY;
         });
-        
-        // 最终高度 = 头部高度 + 内容总高度，并设置一个最大和最小限制
         const calculatedHeight = headerHeight + totalContentHeight;
-        const finalHeight = Math.min(Math.max(calculatedHeight, 150), 500); // 最小150px, 最大500px
-
-
+        const finalHeight = Math.min(Math.max(calculatedHeight, 150), 600);
+        
         const existingTextNodeId = sourceNode.data.generatedRationaleNodeId;
         const existingTextNode = existingTextNodeId ? subflow.findNode(existingTextNodeId) : null;
 
         if (existingTextNode) {
-            // 如果已存在 TextNode，则更新其内容和高度
             existingTextNode.data.rationales = rationaleList;
+            if (!existingTextNode.dimensions) existingTextNode.dimensions = { width: 250, height: 0 };
             existingTextNode.dimensions.height = finalHeight;
         } else {
-            // 如果不存在，则创建一个新的 TextNode 容器
             const newTextNode = {
-                id: `sub-text-node-${props.nodeId}-${subNodeIdCounter.value++}`,
-                type: 'text', // 使用新的节点类型 'text'
+                id: `sub-text-node-${props.nodeId}-${subNodeIdCounter.value++}`, type: 'text',
                 position: { x: position.x, y: position.y + TEXT_NODE_OFFSET_Y },
-                width: 250,
-                height: finalHeight, // 使用计算出的高度
-                data: {
-                    rationales: rationaleList, // 将整个列表传递给 data
-                },
+                width: 250, height: finalHeight, data: { rationales: rationaleList },
             };
             const newEdge = {
-                id: `sub-content-edge-${newTextNode.id}-to-${sourceNode.id}`,
-                source: newTextNode.id,
-                target: sourceNode.id,
-                sourceHandle: 'bottom', // 从 TextNode 顶部连接
-                targetHandle: 'top', // 连接到 ChainNode 底部
-                type: 'smoothstep',
-                animated: true,
+                id: `sub-content-edge-${newTextNode.id}-to-${sourceNode.id}`, source: newTextNode.id, target: sourceNode.id,
+                sourceHandle: 'bottom', targetHandle: 'top', type: 'smoothstep', animated: true,
             };
-            // 在源节点中存储新创建的 TextNode 的 ID
             sourceNode.data.generatedRationaleNodeId = newTextNode.id;
             subflow.addNodes([newTextNode]);
             subflow.addEdges([newEdge]);
         }
+
+        const ratingNodeId = `rating-chain-node-${sourceNodeId}`;
+        subflow.removeNodes([ratingNodeId]);
+
+        const ratingNodePosition = {
+            x: sourceNode.position.x + (sourceNode.dimensions?.width || 120) + 20,
+            y: sourceNode.position.y
+        };
+        subflow.addNodes([{
+            id: ratingNodeId,
+            type: 'rating',
+            position: ratingNodePosition,
+            data: {
+                context: { parentNodeId: props.nodeId, sourceNodeId: sourceNodeId }
+            },
+            zIndex: 1000,
+            draggable: true,
+            selectable: false,
+        }]);
+
     } catch (error) {
         console.error("Error generating rationale:", error);
         alert(`Failed to generate rationale: ${error.message}`);
@@ -494,8 +426,6 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
         isGeneratingRationaleNodeId.value = null;
     }
 }
-
-
 async function handleSubCanvasRun() {
   if (isSubCanvasRunning.value) return;
   isSubCanvasRunning.value = true;
@@ -503,56 +433,52 @@ async function handleSubCanvasRun() {
   try {
     const userInstruction = instruction.value?.trim();
     const userGoal = goal.value?.trim();
-
     if (!userInstruction || !userGoal) {
       alert("Please provide both an instruction and a goal for the exploration.");
       isSubCanvasRunning.value = false;
       return;
     }
-
     const allNodes = subflow.getNodes.value;
     const allEdges = subflow.getEdges.value;
-
-    // 同时移除旧的 text node 和 chain node
-    const nodesToRemove = allNodes.filter(n =>
-      (n.type === 'chain' && !n.data.isManual) || n.type === 'text'
-    );
-
+    const nodesToRemove = allNodes.filter(n => (n.type === 'chain' && !n.data.isManual) || n.type === 'text');
     if (nodesToRemove.length > 0) {
         const nodeIdsToRemove = nodesToRemove.map(n => n.id);
         const edgesToRemove = allEdges.filter(e => nodeIdsToRemove.includes(e.source) || nodeIdsToRemove.includes(e.target));
-        
-        if (edgesToRemove.length > 0) {
-          subflow.removeEdges(edgesToRemove.map(e => e.id));
-        }
+        if (edgesToRemove.length > 0) subflow.removeEdges(edgesToRemove.map(e => e.id));
         subflow.removeNodes(nodeIdsToRemove);
     }
-
     const url = "http://localhost:7001/generate-thinking-chain";
     const payload = {
-      design_background: props.designBackground,
-      design_goal: props.designGoal,
-      parent_node_content: props.parentNodeContent,
-      parent_node_title : props.parentNodeTitle,
-      instruction: userInstruction,
-      goal: userGoal,
+      design_background: props.designBackground, design_goal: props.designGoal,
+      parent_node_content: props.parentNodeContent, parent_node_title : props.parentNodeTitle,
+      instruction: userInstruction, goal: userGoal,
     };
-
     const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
     });
-
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: response.statusText }));
       throw new Error(`Server responded with ${response.status}: ${errorData.detail || response.statusText}`);
     }
-
     const data = await response.json();
-    
     chainList.value = data.chain;
     generateNodeChain(data.chain);
+
+    // 同样，直接添加节点而不是 emit
+    const buttonRect = runBtnRef.value.getBoundingClientRect();
+    const flowRect = vueFlowRef.value.$el.getBoundingClientRect();
+    const position = subflow.project({
+        x: buttonRect.right - flowRect.left + 20,
+        y: buttonRect.top - flowRect.top
+    });
+    
+    subflow.addNodes([{
+        id: `rating-subcanvas-run-${props.nodeId}`,
+        type: 'rating',
+        position,
+        data: { context: { parentNodeId: props.nodeId } },
+        zIndex: 1000,
+    }]);
 
   } catch (error) {
     console.error("Error during sub-canvas run:", error);
@@ -573,10 +499,7 @@ function onHeaderMouseDown(event) {
   if (event.target.closest('button, input, .run-button-wrapper')) return;
   isDragging.value = true;
   const rect = subCanvasEl.value.getBoundingClientRect();
-  dragOffset.value = {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top,
-  };
+  dragOffset.value = { x: event.clientX - rect.left, y: event.clientY - rect.top };
   window.addEventListener('mousemove', onDragMove);
   window.addEventListener('mouseup', onDragEnd);
 }
@@ -610,7 +533,7 @@ onUnmounted(() => {
             <div v-if="isSaveButtonRunning" class="spinner"></div>
             <span v-else>Save</span>
           </button>
-          <button @click="emit('close')"  class="close-btn" title="Close Canvas">×</button>
+          <button @click="emit('close', { nodes: subflow.getNodes.value, edges: subflow.getEdges.value })"  class="close-btn" title="Close Canvas">×</button>
         </div>
       </div>
       <div class="upper-area">
@@ -625,7 +548,7 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="run-button-wrapper">
-          <button class="run-btn" @click="handleSubCanvasRun" :disabled="isSubCanvasRunning" title="Run Sub-Canvas Logic">
+          <button ref="runBtnRef" class="run-btn" @click="handleSubCanvasRun" :disabled="isSubCanvasRunning" title="Run Sub-Canvas Logic">
             <div v-if="isSubCanvasRunning" class="spinner"></div>
             <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
               <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" />
@@ -643,10 +566,17 @@ onUnmounted(() => {
         class="sub-flow" 
         ref="vueFlowRef"
         @connect="onSubCanvasConnect"
-        
         >
-          
-          <!-- ChainNode 模板 -->
+          <!-- 4. 注册 #node-rating 模板 -->
+          <template #node-rating="props">
+            <RatingNode
+              v-bind="props"
+              @close="handleRatingClose"
+              @submit="handleRatingSubmit"
+            />
+          </template>
+
+          <!-- Other node templates -->
           <template #node-chain="chainProps">
             <ChainNode
               v-bind="chainProps"
@@ -656,7 +586,6 @@ onUnmounted(() => {
               :is-generating-rationale="isGeneratingRationaleNodeId === chainProps.id"
             />
           </template>
-
           <template #edge-custom="props">
               <CustomEdge v-bind="props" @delete-edge="onEdgeDeleteInSubCanvas" />
           </template>
@@ -682,6 +611,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* Styles are unchanged, so they are omitted for brevity. You can copy them from your original file. */
 .sub-canvas-overlay {
   position: fixed;
   top: 0;

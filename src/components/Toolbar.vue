@@ -92,7 +92,7 @@ function openColorPicker() {
       </button>
 
       <button class="tool-button" :class="{ active: isAddGroup }"
-        :style="{ backgroundColor: isAddGroup ? newGroupColor : '', borderColor: isAddingGroup ? newGroupColor : '' }"
+        :style="{ backgroundColor: isAddGroup ? newNodeColor : '', borderColor: isAddGroup ? newNodeColor : '' }"
         @click="handleGroupClick" title="Click to add a new group base.">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round">

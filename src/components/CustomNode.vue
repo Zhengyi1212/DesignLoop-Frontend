@@ -129,7 +129,7 @@ watch(() => props.data.content, (newValue, oldValue) => {
   @dragleave="onDragLeave" 
   @drop="onDrop" 
   @wheel.stop>
-    <NodeResizer v-if="id !== 'ghost-node'" :min-width="300" :min-height="300" :visible="selected"
+    <NodeResizer v-if="id !== 'ghost-node'" :min-width="180" :min-height="180" :visible="selected"
       line-class-name="resizer-line" handle-class-name="resizer-handle" />
 
     <template v-if="id !== 'ghost-node'">

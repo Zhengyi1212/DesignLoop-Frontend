@@ -12,11 +12,11 @@ import SubCanvas from './components/SubCanvas.vue';
 import CanvasNodePanel from './components/CanvasNodePanel.vue';
 import SnapshotDetailModal  from './components/SnapshotDetailModal.vue';
 
-// Component Definitions
+
 const CustomNode = defineAsyncComponent(() => import('./components/CustomNode.vue'));
 const RunNode = defineAsyncComponent(() => import('./components/RunNode.vue'));
 const GroupNode = defineAsyncComponent(() => import('./components/GroupNode.vue'));
-// 1. 导入新的 RatingNode 组件
+
 const RatingNode = defineAsyncComponent(() => import('./components/RatingNode.vue'));
 
 
@@ -44,13 +44,13 @@ const snapshots = ref([]);
 const newNodeColor = ref('#34495e');
 const isDetailModalVisible = ref(false);
 const selectedSnapshotForDetail = ref(null);
-// Add Mode States
+
 const isAddingNode = ref(false);
 const isAddingRunNode = ref(false);
 const isAddingGroup = ref(false);
 const isShowingRunNode = ref(true);
 
-// --- Session Management (Unchanged) ---
+// --- Session
 const isSessionExpired = ref(false);
 const SESSION_DURATION = 20 * 60 * 1000;
 
@@ -99,34 +99,64 @@ function closeSnapshotDetails() {
   isDetailModalVisible.value = false;
 }
 
-// 2. 移除旧的 RatingPanel 逻辑 (activeRatingPanels 等)
 
-// 3. 创建一个通用的函数来添加反馈节点
 function addRatingNode({ position, type, context = {} }) {
   const id = `rating-${type}-${Date.now()}`;
   const newNode = {
     id,
-    type: 'rating', // 使用新的节点类型
+    type: 'rating',
     position,
-    data: { context }, // 传递上下文信息
-    zIndex: 1000, // 确保反馈节点在最上层
-    draggable: true, // 可以拖动
-    selectable: false, // 通常不需要选中
+    data: { context },
+    zIndex: 1000, 
+    draggable: true, // 
+    selectable: false, 
   };
   addNodes([newNode]);
 }
 
-// 4. 创建处理反馈节点事件的方法
 function handleRatingClose(nodeId) {
   removeNodes([nodeId]);
 }
 
-function handleRatingSubmit(payload) {
-  // 在这里你可以将 payload 发送到后端
-  console.log('Submitting rating to backend:', payload);
-  // 提交后关闭节点
-  removeNodes([payload.nodeId]);
+async function handleRatingSubmit(payload) {
+
+  console.log('Received payload from RatingNode:', payload);
+
+
+  const runNodeTitle = payload.context.title;
+  const runNodeContent = payload.context.content;
+  const ratings = payload.ratings
+  try {
+    const response = await fetch("http://localhost:7001/submit-rating", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+     
+      body: JSON.stringify({
+        ratings: ratings,
+        node_title: runNodeTitle,
+        node_content: runNodeContent,
+        user_id: instructionPanels.value[0].content,
+
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server responded with ${response.status}`);
+    }
+
+    const responseData = await response.json();
+    console.log('Backend response:', responseData);
+
+  } catch (error) {
+    console.error("Failed to submit rating:", error);
+  } finally {
+  
+    removeNodes([payload.nodeId]);
+  }
 }
+
 
 
 function manageSession() {
@@ -181,7 +211,7 @@ watch(
   { deep: true }
 );
 
-// --- Right Panel Resizing (Unchanged) ---
+
 const DEFAULT_PANEL_WIDTH = 200;
 const MIN_PANEL_WIDTH = 40;
 const rightPanelWidth = ref(DEFAULT_PANEL_WIDTH);
@@ -213,7 +243,6 @@ function toggleRightPanel() {
   rightPanelWidth.value = isRightPanelCollapsed.value ? DEFAULT_PANEL_WIDTH : 0;
 }
 
-// --- Add Node Logic (Unchanged) ---
 function setAddMode(mode) {
     isAddingNode.value = mode === 'node';
     isAddingRunNode.value = mode === 'run';
@@ -328,8 +357,6 @@ function removeConnectionData(edge) {
   }
 }
 
-// --- Other Handlers (Unchanged) ---
-
 function handleDuplicateNode() {
   const selectedNodes = getSelectedNodes.value;
   if (selectedNodes.length !== 1) return; 
@@ -374,36 +401,32 @@ function handleOpenSubCanvas(nodeId) {
       };
 }
 
-function handleCloseSubCanvas(payload) { // 接收从子画布传来的 payload
+function handleCloseSubCanvas(payload) { 
   if (!activeSubCanvasData.value) return;
 
-  // 1. 获取刚刚关闭的子画布对应的父节点 ID
+
   const parentNodeId = activeSubCanvasData.value.id;
   const parentNode = findNode(parentNodeId);
 
-  // 2. 检查父节点是否关联了一个快照
   if (parentNode && parentNode.data.appliedSnapshotId && payload) {
     const linkedSnapshotId = parentNode.data.appliedSnapshotId;
 
-    // 3. 在 snapshots 数组中找到这个快照
     const snapshotToUpdate = snapshots.value.find(s => s.id === linkedSnapshotId);
 
-    // 4. 如果找到了，就用新的图表数据更新它
     if (snapshotToUpdate) {
-      // 使用 JSON.parse/stringify 来确保深度复制，避免响应性问题
       snapshotToUpdate.data.subGraph = {
         nodes: JSON.parse(JSON.stringify(payload.nodes)),
         edges: JSON.parse(JSON.stringify(payload.edges)),
       };
       
-      // (可选) 你也可以更新 instruction 和 goal
+    
       snapshotToUpdate.data.instruction = parentNode.data.instruction;
       snapshotToUpdate.data.goal = parentNode.data.goal;
-      snapshotToUpdate.goal = parentNode.data.goal; // 同时更新顶层的 goal
+      snapshotToUpdate.goal = parentNode.data.goal;
     }
   }
 
-  // 最后，关闭子画布
+ 
   activeSubCanvasData.value = null; 
 }
 
@@ -422,6 +445,7 @@ function handleSubCanvasDataUpdate(event) {
     if (parentNode) {
         parentNode.data.instruction = event.instruction;
         parentNode.data.goal = event.goal;
+        parentNode.data.chain = event.chain
     }
 }
 
@@ -438,21 +462,20 @@ function toggleFreeze() {
 
 function handleSaveSnapshot(snapshotPayload) {
    const newSnapshot = {
-    id: `${snapshotIdCounter}`, // 这个 id 是关键
+    id: `${snapshotIdCounter}`, // 这个 id 
     parentNodeId: snapshotPayload.parentNodeId,
     parentNodeTitle: snapshotPayload.parentNodeTitle,
     goal: snapshotPayload.data.goal,
     data: snapshotPayload.data
   };
 
-  // 2. 将新快照添加到列表中
+
   snapshots.value.push(newSnapshot);
 
-  // 3. 找到发起保存操作的父节点
+
   const parentNode = findNode(snapshotPayload.parentNodeId);
   if (parentNode) {
-    // 4. 将新快照的ID直接赋值给父节点的 `appliedSnapshotId`
-    //    这将立即触发 CustomNode.vue 中您已经写好的 v-if="data.appliedSnapshotId" 逻辑
+   
     if (!parentNode.data) parentNode.data = {};
     parentNode.data.appliedSnapshotId = newSnapshot.id; //
   }
@@ -470,17 +493,14 @@ function handleApplySnapshot({ nodeId, snapshotData }) {
   targetNode.data.subGraph = JSON.parse(JSON.stringify(dataToApply.subGraph));
   targetNode.data.chain = dataToApply.chain;
 
-  // Add a visual indicator to the target node
+  // Add a visual indicator
   targetNode.data.hasSnapshot = true;
-
-  // Create a new snapshot that is a copy of the applied one,
-  // but linked to the TARGET node.
   const newSnapshotCopy = {
     id: `${snapshotIdCounter}`,
-    // Link to the node it was just applied to
+   
     parentNodeId: targetNode.id,
     parentNodeTitle: targetNode.data.title, 
-    // Copy the rest of the data from the original snapshot
+    // 
     goal: snapshotData.goal,
     data: JSON.parse(JSON.stringify(snapshotData.data))
   };
@@ -499,7 +519,7 @@ function handleNodeUpdate(event) {
   }
 }
 
-// 5. 修改 handleNodeRun
+
 async function handleNodeRun(nodeId) {
     const node = findNode(nodeId);
     if (!node || runningNodeId.value) return;
@@ -522,7 +542,7 @@ async function handleNodeRun(nodeId) {
         const data = await response.json();
         node.data.content = data.content; 
         
-        // 计算反馈节点的位置：在运行节点右侧
+       /*
         const position = {
             x: node.position.x + (node.dimensions?.width || 200) + 20,
             y: node.position.y,
@@ -534,12 +554,32 @@ async function handleNodeRun(nodeId) {
           type: 'run-node',
           context: { nodeId: nodeId, result: data.content }
         });
-
+*/
     } catch (error) {
         node.data.content = "Error: " + error.message;
     } finally {
         runningNodeId.value = null;
     }
+}
+
+function handleShowRating({ nodeId }) {
+  const node = findNode(nodeId);
+  if (!node) return;
+
+  const position = {
+    x: node.position.x + (node.dimensions?.width || 200) + 20,
+    y: node.position.y,
+  };
+
+  addRatingNode({
+    position,
+    type: 'run-node-rating',
+    context: {
+      runNodeId: nodeId, 
+      title: node.data.title, 
+      content: node.data.content, //
+    }
+  });
 }
 
 function findPredecessors(startNodeId, allNodes, allEdges) {
@@ -592,7 +632,7 @@ function handleRunTriggered(targetNodeId) {
   }
 }
 
-// 6. 修改 handleFetchPipeline
+//handleFetchPipeline
 async function handleFetchPipeline(payload) {
   isFetchingPipeline.value = true;
   try {
@@ -610,18 +650,18 @@ async function handleFetchPipeline(payload) {
     instructionPanels.value[3].content = Array.isArray(data.pipeline) ? data.pipeline.join('\n') : String(data.pipeline);
   
     // 将按钮的屏幕坐标转换为主画布坐标
-    const buttonRect = payload.event.target.getBoundingClientRect();
-    const position = project({ x: buttonRect.right + 202, y: buttonRect.top + 362});
+    //const buttonRect = payload.event.target.getBoundingClientRect();
+   // const position = project({ x: buttonRect.right + 202, y: buttonRect.top + 362});
 
     // 添加反馈节点
-    addRatingNode({
-        position,
-        type: 'fetch-pipeline',
-        context: {
+    //addRatingNode({
+      //  position,
+       // type: 'fetch-pipeline',
+       // context: {
             // 可选：添加一些上下文信息
-            design_goal: instructionPanels.value[2].content
-        }
-    });
+         //   design_goal: instructionPanels.value[2].content
+        //}
+   // });
   
   } catch (error) {
     console.error("Error during pipeline request:", error);
@@ -679,13 +719,13 @@ async function handleGeneration(payload) {
     const data = await response.json();
     if (data) node_chain_autogene(data);
 
-    const buttonRect = payload.event.target.getBoundingClientRect();
-    const position = project({ x: buttonRect.right + 202, y: buttonRect.top + 465});
+    //const buttonRect = payload.event.target.getBoundingClientRect();
+    //const position = project({ x: buttonRect.right + 202, y: buttonRect.top + 465});
     
-    addRatingNode({
-      position,
-      type: 'node-chain-generation'
-    });
+    //addRatingNode({
+      //position,
+      //type: 'node-chain-generation'
+    //});
 
   } catch (error) {
     console.error("Error during node chain request:", error);
@@ -771,7 +811,7 @@ onBeforeUnmount(() => {
           <RunNode
             v-bind="props"
             @delete="onNodeDelete"
-            
+            @show-rating="handleShowRating"
             @run-node="handleNodeRun"
             @update-node-data="handleNodeUpdate"
             :is-running="props.id === runningNodeId"
@@ -818,6 +858,7 @@ onBeforeUnmount(() => {
         v-bind="activeSubCanvasData"
         @close="handleCloseSubCanvas" @update:graph="handleSubCanvasUpdate"
         @update:data="handleSubCanvasDataUpdate"
+        :user-id="instructionPanels[0].content"
     />
     </main>
 

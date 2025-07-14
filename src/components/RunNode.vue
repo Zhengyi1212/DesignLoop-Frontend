@@ -10,8 +10,8 @@ const props = defineProps({
   isRunning: { type: Boolean, default: false },
 });
 
-// MODIFIED: Add 'snapshot-dropped' to the list of emitted events.
-const emit = defineEmits(['delete', 'open-canvas', 'run-node', 'update-node-data', 'run-triggered']);
+// 1. 在 emits 列表中添加 'show-rating'
+const emit = defineEmits(['delete', 'run-node', 'update-node-data', 'run-triggered', 'show-rating']);
 
 // --- In-place Editing Logic (Unchanged) ---
 const isEditingTitle = ref(false);
@@ -47,42 +47,8 @@ function saveChanges() {
   isEditingTitle.value = false;
   isEditingContent.value = false;
 }
-/*
-// --- NEW: Drag and Drop Snapshot Logic ---
-const isDraggingOver = ref(false);
 
-function onDragOver(event) {
-  event.preventDefault();
-  // Provide visual feedback only if the dragged item is a snapshot.
-  if (event.dataTransfer.types.includes('application/json/snapshot')) {
-    isDraggingOver.value = true;
-    event.dataTransfer.dropEffect = 'copy'; // Show a 'copy' cursor
-  }
-}
-
-function onDragLeave() {
-  isDraggingOver.value = false;
-}
-*/
-/*function onDrop(event) 
-
-  //event.preventDefault();
-  isDraggingOver.value = false;
-  
-  const snapshotDataString = event.dataTransfer.getData('application/json/snapshot');
-  if (!snapshotDataString) return;
-
-  try {
-    const snapshotData = JSON.parse(snapshotDataString);
-    // Emit an event to the parent (App.vue) with the node's ID and the dropped data.
-    emit('snapshot-dropped', { nodeId: props.id, snapshotData });
-  } catch (e) {
-    console.error("Failed to parse snapshot data on drop:", e);
-  }
-}
-*/
-
-// --- Component Specific Logic & Handlers (Unchanged) ---
+// --- Component Specific Logic & Handlers ---
 const nodeHeaderStyle = computed(() => {
   return {
     backgroundColor: '#f1c40f',
@@ -102,17 +68,16 @@ const nodeSelectionStyle = computed(() => {
 function onDelete() {
   emit('delete', props.id);
 }
-//*
-//function onOpenCanvas() {
-  //if (isEditingTitle.value || isEditingContent.value) return;
-  //if (props.id === 'ghost-node') return;
-  //emit('open-canvas', props.id);
-//}
 
 function onRun() {
   if (props.isRunning) return;
   emit('run-triggered', props.id);
   emit('run-node', props.id);
+}
+
+// 2. 新增方法，用于触发 show-rating 事件
+function onShowRating() {
+  emit('show-rating', { nodeId: props.id });
 }
 </script>
 
@@ -121,16 +86,11 @@ function onRun() {
     class="run-node"
     :class="{ 
       'is-editing': isEditingTitle || isEditingContent,
-      'is-dragging-over': isDraggingOver // NEW: Add class for drop feedback
     }"
     :style="[
       id === 'ghost-node' ? { pointerEvents: 'none' } : {},
       nodeSelectionStyle
     ]"
-   
-    @dragover.prevent="onDragOver"
-    @dragleave="onDragLeave"
-    @drop="onDrop"
   >
     <NodeResizer
       v-if="id !== 'ghost-node'"
@@ -142,9 +102,7 @@ function onRun() {
     />
 
     <template v-if="id !== 'ghost-node'">
-     
       <Handle id="left" :position="Position.Left" />
-      
       <Handle id="right" :position="Position.Right" />
     </template>
 
@@ -152,7 +110,6 @@ function onRun() {
       <strong
         v-if="!isEditingTitle"
         @click.stop="startEditTitle"
-        
       >
         {{ data.title || "Edit instruction..." }}
       </strong>
@@ -163,7 +120,6 @@ function onRun() {
         @blur="saveChanges"
         @keydown.enter="saveChanges"
         @click.stop
-       
         class="title-input"
         type="text"
       />
@@ -184,7 +140,14 @@ function onRun() {
       ></textarea>
     </div>
 
+    <!-- 3. 修改 node-footer 结构 -->
     <div class="node-footer">
+        <!-- 新增的评价按钮 -->
+        <button v-if="!isRunning && !isEditingContent" class="rating-btn" @click.stop="onShowRating" title="Rate this result">
+            <p>Rate</p>
+        </button>
+
+        <!-- 原有的运行按钮/加载动画 -->
         <button v-if="!isRunning && !isEditingContent" class="run-btn" @click.stop="onRun" title="Run this node">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                 <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
@@ -199,6 +162,7 @@ function onRun() {
 </template>
 
 <style scoped>
+/* 4. 修改/增加样式 */
 .run-node {
   background-color: #ffffff;
   border: 1px solid #f3d179;
@@ -212,7 +176,6 @@ function onRun() {
   width: 100%;
   transition: all 0.2s ease-in-out;
 }
-/* NEW: Style for when a snapshot is being dragged over the node */
 .run-node.is-dragging-over {
   outline: 3px dashed #2ecc71;
   outline-offset: 4px;
@@ -241,7 +204,7 @@ function onRun() {
   cursor: text;
 }
 .node-content {
-  
+  padding: 12px;
   font-size: 13px;
   color: #2c3e50;
   flex-grow: 1;
@@ -265,9 +228,31 @@ function onRun() {
 .node-footer {
     padding: 0 12px 12px;
     display: flex;
-    justify-content: flex-end;
+    /* 修改为 space-between */
+    justify-content: space-between; 
     align-items: center;
     height: 40px;
+}
+
+.rating-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid #bdc3c7;
+    background-color: #ecf0f1;
+    color: #7f8c8d;
+    border-radius: 50%; /* 圆形 */
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.rating-btn:hover {
+    background-color: #bdc3c7;
+    color: white;
+    border-color: #95a5a6;
 }
 
 .run-btn {
@@ -280,7 +265,7 @@ function onRun() {
     background-color: #e67e22; border-color: #d35400;
 }
 .spinner-container {
-    display: flex; justify-content: center; align-items: center; width: 100%;
+    display: flex; justify-content: flex-end; align-items: center; width: 100%;
 }
 .spinner {
   border: 3px solid rgba(0,0,0,0.1); border-radius: 50%;
@@ -317,7 +302,6 @@ function onRun() {
 }
 .run-node .vue-flow__handle-top,
 .run-node .vue-flow__handle-bottom {
-  opacity: 0;  /* 完全透明 */
-
+  opacity: 0;
 }
 </style>

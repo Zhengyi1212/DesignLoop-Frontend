@@ -92,7 +92,7 @@ function onDeleteEdge() {
 </template>
 
 <style>
-/* 新增：定义边的流动动画 */
+
 @keyframes dash-animation {
   to {
     stroke-dashoffset: -20;

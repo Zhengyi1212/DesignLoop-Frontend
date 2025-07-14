@@ -9,10 +9,10 @@ import CustomEdge from './CustomEdge.vue';
 import ChainNode from './ChainNode.vue';
 import TextNode from './TextNode.vue';
 
-// 1. 导入 RatingNode 组件
+
 const RatingNode = defineAsyncComponent(() => import('./RatingNode.vue'));
 
-const TEXT_NODE_OFFSET_Y = -120;
+const TEXT_NODE_OFFSET_Y = -280;
 
 const props = defineProps({
   nodeId: { type: String, required: true },
@@ -26,6 +26,8 @@ const props = defineProps({
   designBackground : { type: String, default: '' },
   designGoal : { type: String, default: '' },
   initialChainList: { type: Array, required: true },
+
+  userId: { type: String, required: true },
 });
 
 const emit = defineEmits(['close', 'update:graph', 'update:data', 'save-snapshot']);
@@ -53,18 +55,91 @@ const isGeneratingRationaleNodeId = ref(null);
 
 const subflow = useVueFlow({ id: props.nodeId });
 
-// 2. 添加处理反馈节点事件的方法
+
 function handleRatingClose(nodeId) {
   subflow.removeNodes([nodeId]);
 }
 
-function handleRatingSubmit(payload) {
-  console.log('Submitting rating from SubCanvas to backend:', payload);
-  subflow.removeNodes([payload.nodeId]);
+
+async function handleRatingSubmit(payload) {
+
+  // {
+ 
+  //   ratings: { accuracy: 3, relevance: 3, clarity: 3 },
+  
+  // }
+  console.log('Submitting SubCanvas rating to backend:', payload);
+
+  try {
+    const response = await fetch("http://localhost:7001/submit-rating-subcanvas", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+   
+      body: JSON.stringify({
+        ratings: payload.ratings,
+        instruction: payload.context.instruction,
+        goal: payload.context.goal,
+        chainList: payload.context.chainList,
+        user_id: props.userId, 
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server responded with ${response.status}`);
+    }
+
+    const responseData = await response.json();
+    console.log('Backend response:', responseData);
+
+  } catch (error) {
+    console.error("Failed to submit SubCanvas rating:", error);
+  } finally {
+   
+    subflow.removeNodes([payload.nodeId]);
+  }
 }
 
 
-// --- Other functions (unchanged) ---
+function handleShowSubCanvasRating() {
+    if (!vueFlowRef.value) return;
+
+   
+    const { x, y, zoom } = subflow.getViewport();
+  
+    const { width } = vueFlowRef.value.dimensions;
+
+
+    const ratingNodeWidth = 260; 
+    const padding = 20; 
+
+   
+    const position = {
+       
+        x: x + (width / zoom) - ratingNodeWidth - padding*2,
+        // 
+        y: y + padding
+    };
+
+    
+    subflow.addNodes([{
+        id: `rating-subcanvas-${props.nodeId}`,
+        type: 'rating',
+        position,
+        data: {
+          
+            context: {
+                instruction: instruction.value,
+                goal: goal.value,
+                chainList: chainList.value,
+            }
+        },
+        zIndex: 1000,
+        draggable: true,
+        selectable: false,
+    }]);
+}
 
 function handleRationalesUpdate({ nodeId, newRationales }) {
   const node = subflow.findNode(nodeId);
@@ -88,6 +163,15 @@ function handleCreateNodeFromText(text, sourceTextNode) {
   subflow.addNodes([newNode]);
 }
 
+watch(chainList, (newChainList) => {
+   
+    emit('update:data', {
+        nodeId: props.nodeId,
+        instruction: instruction.value,
+        goal: goal.value,
+        chain: newChainList, 
+    });
+}, { deep: true });
 
 function handleChainNodeContentUpdate({ id, content }) {
   const node = subflow.findNode(id);
@@ -106,9 +190,8 @@ async function handleSaveButton() {
     const nodesForSnapshot = allNodes.filter(n => n.id !== 'ghost-node' && !textNodeIds.has(n.id) && n.type !== 'rating');
     const edgesForSnapshot = allEdges.filter(e => !textNodeIds.has(e.source) && !textNodeIds.has(e.target));
     const snapshotPayload = {
-      // Add parentNodeId and parentNodeTitle to the payload
       parentNodeId: props.nodeId,
-      parentNodeTitle: props.parentNodeTitle, 
+      parentNodeTitle: props.parentNodeTitle,
       title: `Version of: ${goal.value || 'Untitled'}`,
       data: {
         instruction: instruction.value,
@@ -224,7 +307,7 @@ function toggleFreeze() {
 watch([subflow.nodes, subflow.edges], () => {
   emit('update:graph', {
     nodeId: props.nodeId,
-    nodes: subflow.getNodes.value.filter(n => n.type !== 'rating'), // 不保存反馈节点
+    nodes: subflow.getNodes.value.filter(n => n.type !== 'rating'),
     edges: subflow.getEdges.value,
   });
 }, { deep: true });
@@ -309,7 +392,6 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
 
     isGeneratingRationaleNodeId.value = sourceNodeId;
     try {
-        // --- 准备请求数据的部分保持不变 ---
         const predecessors = findDirectPredecessorsWithText(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value);
         const formattedChain = (chainList.value || []).map(item => ({ content: item }));
         const payload = {
@@ -336,37 +418,21 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
         }
 
         const data = await response.json();
-
-        // ✨ 1. 将整个 data.rationale 对象转换为字符串
         const dataString = JSON.stringify(data.rationale);
-
-        // ✨ 2.【稳健版正则】定义一个可以同时匹配双引号 "..." 和单引号 '...' 的正则表达式
-        // "([^"]+)" 捕获双引号内的内容到第1组
-        // | 或
-        // '([^']+)' 捕获单引号内的内容到第2组
         const regex = /"([^"]+)"|'([^']+)'/g;
         let matches;
         const extractedBlocks = [];
 
-        // ✨ 3. 循环执行匹配，找出所有符合条件的内容
         while ((matches = regex.exec(dataString)) !== null) {
-            // 检查第1捕获组（双引号内容）或第2捕获组（单引号内容）
-            // 使用 || 操作符确保我们能取到匹配到的那个
             const content = matches[1] || matches[2];
             extractedBlocks.push(content);
         }
-
-        // ✨ 4. 根据长度（大于15个字）筛选出我们真正需要的文字块
         const rationaleList = extractedBlocks.filter(block => block.length > 15);
 
-        // ✨ 5. 检查最终列表是否为空
         if (rationaleList.length === 0) {
             console.warn(`No text blocks longer than 15 characters were found inside single or double quotes. Total blocks extracted: ${extractedBlocks.length}`);
             return;
         }
-
-
-        // --- 后续的节点高度计算、创建/更新等逻辑保持不变 ---
 
         const headerHeight = 35; const itemPaddingY = 24; const itemGapY = 8;
         const avgCharsPerLine = 35; const lineHeight = 16;
@@ -377,7 +443,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
         });
         const calculatedHeight = headerHeight + totalContentHeight;
         const finalHeight = Math.min(Math.max(calculatedHeight, 150), 600);
-        
+
         const existingTextNodeId = sourceNode.data.generatedRationaleNodeId;
         const existingTextNode = existingTextNodeId ? subflow.findNode(existingTextNodeId) : null;
 
@@ -399,26 +465,6 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             subflow.addNodes([newTextNode]);
             subflow.addEdges([newEdge]);
         }
-
-        const ratingNodeId = `rating-chain-node-${sourceNodeId}`;
-        subflow.removeNodes([ratingNodeId]);
-
-        const ratingNodePosition = {
-            x: sourceNode.position.x + (sourceNode.dimensions?.width || 120) + 20,
-            y: sourceNode.position.y
-        };
-        subflow.addNodes([{
-            id: ratingNodeId,
-            type: 'rating',
-            position: ratingNodePosition,
-            data: {
-                context: { parentNodeId: props.nodeId, sourceNodeId: sourceNodeId }
-            },
-            zIndex: 1000,
-            draggable: true,
-            selectable: false,
-        }]);
-
     } catch (error) {
         console.error("Error generating rationale:", error);
         alert(`Failed to generate rationale: ${error.message}`);
@@ -429,7 +475,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
 async function handleSubCanvasRun() {
   if (isSubCanvasRunning.value) return;
   isSubCanvasRunning.value = true;
-  
+
   try {
     const userInstruction = instruction.value?.trim();
     const userGoal = goal.value?.trim();
@@ -463,23 +509,6 @@ async function handleSubCanvasRun() {
     const data = await response.json();
     chainList.value = data.chain;
     generateNodeChain(data.chain);
-
-    // 同样，直接添加节点而不是 emit
-    const buttonRect = runBtnRef.value.getBoundingClientRect();
-    const flowRect = vueFlowRef.value.$el.getBoundingClientRect();
-    const position = subflow.project({
-        x: buttonRect.right - flowRect.left + 20,
-        y: buttonRect.top - flowRect.top
-    });
-    
-    subflow.addNodes([{
-        id: `rating-subcanvas-run-${props.nodeId}`,
-        type: 'rating',
-        position,
-        data: { context: { parentNodeId: props.nodeId } },
-        zIndex: 1000,
-    }]);
-
   } catch (error) {
     console.error("Error during sub-canvas run:", error);
     alert(`An error occurred: ${error.message}`);
@@ -547,6 +576,7 @@ onUnmounted(() => {
             <textarea id="instruction" v-model="instruction" @blur="onFieldBlur" :placeholder="'描述推理应如何展开，如线性推理、替代推理、特定视角推理或分支推理'" rows="3"></textarea>
           </div>
         </div>
+        
         <div class="run-button-wrapper">
           <button ref="runBtnRef" class="run-btn" @click="handleSubCanvasRun" :disabled="isSubCanvasRunning" title="Run Sub-Canvas Logic">
             <div v-if="isSubCanvasRunning" class="spinner"></div>
@@ -555,19 +585,21 @@ onUnmounted(() => {
             </svg>
             <span>Run</span>
           </button>
+          <button class="rating-btn-sub" @click="handleShowSubCanvasRating" :disabled="isSubCanvasRunning" title="Rate this configuration">
+             <p>Rate</p>
+          </button>
         </div>
       </div>
       <div class="sub-canvas-content">
-        <VueFlow 
-        :id="props.nodeId" 
-        v-model:nodes="nodes" 
-        v-model:edges="edges" 
-        :fit-view-on-init="true" 
-        class="sub-flow" 
+        <VueFlow
+        :id="props.nodeId"
+        v-model:nodes="nodes"
+        v-model:edges="edges"
+        :fit-view-on-init="true"
+        class="sub-flow"
         ref="vueFlowRef"
         @connect="onSubCanvasConnect"
         >
-          <!-- 4. 注册 #node-rating 模板 -->
           <template #node-rating="props">
             <RatingNode
               v-bind="props"
@@ -714,8 +746,11 @@ onUnmounted(() => {
 }
 .run-button-wrapper{
   display: flex;
+  flex-direction: column; /* 让按钮垂直排列 */
   align-items: center;
-  padding: 0 20px;
+  justify-content: center; /* 垂直居中 */
+  gap: 8px; /* 按钮之间的间距 */
+  padding: 10px 20px;
 }
 .run-btn {
   display: flex;
@@ -774,6 +809,32 @@ onUnmounted(() => {
   border-color: #6c757d;
   cursor: not-allowed;
 }
+.rating-btn-sub {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px; /* 与 Run 按钮同宽 */
+    height: 28px;
+    padding: 0;
+    border: 1px solid #bdc3c7;
+    background-color: #ecf0f1;
+    color: #7f8c8d;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.rating-btn-sub:hover:not(:disabled) {
+    background-color: #bdc3c7;
+    color: white;
+    border-color: #95a5a6;
+}
+.rating-btn-sub:disabled {
+    background-color: #e9ecef;
+    border-color: #e9ecef;
+    color: #bdc3c7;
+    cursor: not-allowed;
+}
+
 .spinner {
   border: 3px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;

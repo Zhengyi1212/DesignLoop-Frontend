@@ -17,9 +17,11 @@ const emit = defineEmits(['close', 'submit']);
 
 // 评分的响应式状态保持不变
 const ratings = ref({
-  accuracy: 3, // 准确性
+  novelty: 3, 
   relevance: 3, // 相关性
   clarity: 3,   // 清晰度
+  value: 3,
+  suprise: 3,
 });
 
 /**
@@ -85,9 +87,7 @@ function handleClose() {
 
 <template>
   <div class="rating-node-wrapper">
-    <NodeToolbar :is-visible="true" :position="'right'" :align="'start'" :offset="{ x: 8, y: -8 }">
-      <button @click="handleClose" class="close-button" title="Close Feedback">×</button>
-    </NodeToolbar>
+    
 
     <div class="node-header">
       <span class="header-icon">📝</span>
@@ -97,14 +97,14 @@ function handleClose() {
     <div class="node-content">
       <!-- Accuracy Rating -->
       <div class="rating-item">
-        <label>Accuracy: <span class="rating-value">{{ ratings.accuracy }}</span></label>
-        <div class="rating-bar-container" @click="updateRatingFromClick('accuracy', $event)">
+        <label>Novelty: <span class="rating-value">{{ ratings.novelty }}</span></label>
+        <div class="rating-bar-container" @click="updateRatingFromClick('novelty', $event)">
           <div class="rating-bar-track"></div>
           <div class="rating-bar-ticks">
             <span v-for="n in 5" :key="n" class="tick"></span>
           </div>
-          <div class="rating-bar-filled" :style="{ width: getFilledWidth(ratings.accuracy).value }"></div>
-          <div class="rating-thumb" :style="{ left: getThumbPosition(ratings.accuracy).value }"></div>
+          <div class="rating-bar-filled" :style="{ width: getFilledWidth(ratings.novelty).value }"></div>
+          <div class="rating-thumb" :style="{ left: getThumbPosition(ratings.novelty).value }"></div>
         </div>
       </div>
 
@@ -131,6 +131,28 @@ function handleClose() {
           </div>
           <div class="rating-bar-filled" :style="{ width: getFilledWidth(ratings.clarity).value }"></div>
           <div class="rating-thumb" :style="{ left: getThumbPosition(ratings.clarity).value }"></div>
+        </div>
+      </div>
+      <div class="rating-item">
+        <label>Value <span class="rating-value">{{ ratings.value }}</span></label>
+        <div class="rating-bar-container" @click="updateRatingFromClick('value', $event)">
+          <div class="rating-bar-track"></div>
+          <div class="rating-bar-ticks">
+            <span v-for="n in 5" :key="n" class="tick"></span>
+          </div>
+          <div class="rating-bar-filled" :style="{ width: getFilledWidth(ratings.value).value }"></div>
+          <div class="rating-thumb" :style="{ left: getThumbPosition(ratings.value).value }"></div>
+        </div>
+      </div>
+      <div class="rating-item">
+        <label>Suprise: <span class="rating-value">{{ ratings.suprise }}</span></label>
+        <div class="rating-bar-container" @click="updateRatingFromClick('suprise', $event)">
+          <div class="rating-bar-track"></div>
+          <div class="rating-bar-ticks">
+            <span v-for="n in 5" :key="n" class="tick"></span>
+          </div>
+          <div class="rating-bar-filled" :style="{ width: getFilledWidth(ratings.suprise).value }"></div>
+          <div class="rating-thumb" :style="{ left: getThumbPosition(ratings.suprise).value }"></div>
         </div>
       </div>
     </div>

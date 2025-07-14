@@ -1,5 +1,4 @@
 <script setup>
-// ✨ 1. 从 'vue' 中导入 watch
 import { ref, computed, nextTick, watch } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
@@ -36,7 +35,6 @@ const emit = defineEmits(['create-node-from-text', 'update:rationales', 'updateN
 const rationales = ref(props.data.rationales || []);
 const listContainerRef = ref(null);
 
-// ✨ 2. 添加 watch 侦听器来同步 prop 的变化
 watch(() => props.data.rationales, (newRationales) => {
   rationales.value = newRationales || [];
 }, { deep: true });
@@ -119,13 +117,16 @@ function deleteRationale(index) {
   emit('update:rationales', { nodeId: props.id, newRationales: rationales.value });
 }
 
-async function addRationale(index) {
+// ✨ 已修改: 新的函数，用于在列表末尾添加条目
+async function addNewRationale() {
   const newRationaleText = '';
-  rationales.value.splice(index + 1, 0, newRationaleText);
+  rationales.value.push(newRationaleText); // 使用 push 添加到末尾
   emit('update:rationales', { nodeId: props.id, newRationales: rationales.value });
+  
+  // 自动聚焦到新创建的条目上
   await nextTick();
   const listItems = listContainerRef.value.querySelectorAll('.rationale-text');
-  const newItem = listItems[index + 1];
+  const newItem = listItems[listItems.length - 1]; // 获取最后一个条目
   if (newItem) {
     newItem.focus();
   }
@@ -178,15 +179,19 @@ const nodeSelectionStyle = computed(() => {
            <button class="action-btn delete-btn" @click.stop="deleteRationale(index)" title="Delete this item">
             🗑️
           </button>
-          <button class="action-btn add-btn" @click.stop="addRationale(index)" title="Add a new item below">
-            ➕
-          </button>
           <button class="create-node-btn" @click.stop="handleCreateNode(rationale)" title="Create node from this text">
             + Create Node
           </button>
         </div>
       </div>
     </div>
+    
+    <div class="add-rationale-footer">
+      <button @click="addNewRationale" class="add-new-btn" title="Add a new item to the end">
+        + 
+      </button>
+    </div>
+
   </div>
 
   <Teleport to="body">
@@ -246,7 +251,7 @@ const nodeSelectionStyle = computed(() => {
   position: relative;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   overflow: hidden;
-  padding-bottom: 40px; /* 增加底部内边距，为按钮区留出空间 */
+  padding-bottom: 40px; 
 }
 .rationale-item:hover {
   border-color: #3b82f6;
@@ -268,6 +273,7 @@ const nodeSelectionStyle = computed(() => {
   box-shadow: 0 0 0 2px #3b82f6;
 }
 
+
 .rationale-actions {
   position: absolute;
   bottom: 8px;
@@ -275,7 +281,13 @@ const nodeSelectionStyle = computed(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  opacity: 1; 
+  opacity: 0; 
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* ✨ 已修改: 悬停时显示按钮 */
+.rationale-item:hover .rationale-actions {
+  opacity: 1;
 }
 
 .action-btn {
@@ -302,11 +314,6 @@ const nodeSelectionStyle = computed(() => {
   color: #ef4444;
   border-color: #fca5a5;
 }
-.add-btn:hover {
-  background-color: #dbeafe;
-  color: #3b82f6;
-  border-color: #93c5fd;
-}
 
 .create-node-btn {
   position: static;
@@ -325,6 +332,37 @@ const nodeSelectionStyle = computed(() => {
 .create-node-btn:hover {
   background-color: #2563eb;
 }
+
+/* ✨ 已修改: 为新的底部容器和按钮添加样式 */
+.add-rationale-footer {
+  padding: 8px;
+  border-top: 1px solid #fde047; /* 分隔线 */
+  background-color: #fefce8;
+}
+
+.add-new-btn {
+  width: 100%;
+  background-color: #fffbeb;
+  color: #ca8a04;
+  border: 1px dashed #facc15;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.add-new-btn:hover {
+  background-color: #fef9c3;
+  border-color: #eab308;
+  border-style: solid;
+  color: #a16207;
+}
+
 
 .rationale-item-clone {
   cursor: grabbing;

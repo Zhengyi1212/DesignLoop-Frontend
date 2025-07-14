@@ -9,7 +9,7 @@ const props = defineProps({
   selected: { type: Boolean, default: false },
 });
 
-// MODIFIED: Add 'snapshot-dropped' to the list of emitted events.
+
 const emit = defineEmits(['delete', 'open-canvas', 'update-node-data', 'snapshot-dropped','content-changed']);
 
 // --- In-place Editing Logic (Unchanged) ---

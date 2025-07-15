@@ -127,7 +127,7 @@ async function handleRatingSubmit(payload) {
   const runNodeContent = payload.context.content;
   const ratings = payload.ratings
   try {
-    const response = await fetch("http://localhost:7001/submit-rating", {
+    const response = await fetch("/api/submit-rating", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -528,7 +528,7 @@ async function handleNodeRun(nodeId) {
     node.data.content = 'Running...';
     const successors = findPredecessors(nodeId, nodes.value, edges.value);
     try {
-        const response = await fetch("http://localhost:7001/brainstorm", {
+        const response = await fetch("/api/brainstorm", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -636,7 +636,7 @@ function handleRunTriggered(targetNodeId) {
 async function handleFetchPipeline(payload) {
   isFetchingPipeline.value = true;
   try {
-    const response = await fetch("http://localhost:7001/pipeline", {
+    const response = await fetch("/api/pipeline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -708,7 +708,7 @@ function node_chain_autogene(nodeData) {
 async function handleGeneration(payload) {
   isGenerating.value = true;
   try {
-    const response = await fetch("http://localhost:7001/generate-node-chain", {
+    const response = await fetch("/api/generate-node-chain", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         pipeline: instructionPanels.value[3].content,
         design_background: instructionPanels.value[1].content,

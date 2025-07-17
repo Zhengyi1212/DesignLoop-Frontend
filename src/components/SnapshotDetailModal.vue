@@ -8,7 +8,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close']);
 
-// 防止在模态框打开时背景页面滚动
+
 watch(() => props.show, (isVisible) => {
   if (isVisible) {
     document.body.style.overflow = 'hidden';

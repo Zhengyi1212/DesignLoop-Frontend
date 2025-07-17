@@ -843,7 +843,7 @@ onBeforeUnmount(() => {
 
       <div class="main-toolbar-wrapper">
         <Toolbar
-          :is-frozen="isFrozen"
+          
           :is-adding-node="isAddingNode"
           :is-adding-run-node="isAddingRunNode"
           :is-add-group="isAddingGroup"

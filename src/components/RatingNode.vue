@@ -15,7 +15,6 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'submit']);
 
-// 评分的响应式状态保持不变
 const ratings = ref({
   novelty: 3, 
   relevance: 3, // 相关性

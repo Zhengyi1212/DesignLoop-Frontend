@@ -100,7 +100,7 @@ function onGenerate() {
   display: flex;
   flex-direction: column;
   z-index: 10;
-  font-family: 'JetBrains Mono', 'Helvetica Neue', Arial, sans-serif;
+  font-family: Arial;
 }
 
 .panel-container {
@@ -152,7 +152,7 @@ function onGenerate() {
   background-color: #ffffff;
   border-radius: 8px;
   padding: 12px;
-  font-family: 'JetBrains Mono', 'Helvetica Neue', Arial, sans-serif;
+  font-family: Arial;
   font-size: 11px;
   color: #2d3748;
   resize: none;
@@ -199,7 +199,7 @@ function onGenerate() {
 .generate-btn {
   width: 100%;
   padding: 10px 15px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: Arial;
   font-size: 16px;
   font-weight: bold;
   color: white;

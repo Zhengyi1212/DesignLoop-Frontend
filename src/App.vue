@@ -71,7 +71,20 @@ function saveState() {
     console.error("Failed to save state to sessionStorage:", e);
   }
 }
+const snapshotColorPalette = [
+  '#fecaca', '#fed7aa', '#fef08a', '#d9f99d', '#bfdbfe',
+  '#a5f3fc', '#fbcfe8', '#e9d5ff', '#c7d2fe', '#bbf7d0',
+  '#fde68a', '#fecdd3', '#e0e7ff', '#fae8ff', '#d1fae5',
+  '#fef3c7', '#ffedd5', '#fce7f3', '#f0f9ff', '#ecfdf5'
+];
+const snapshotColorIndex = ref(0);
 
+// 3. Add this helper function to get the next color
+function getNextSnapshotColor() {
+  const color = snapshotColorPalette[snapshotColorIndex.value];
+  snapshotColorIndex.value = (snapshotColorIndex.value + 1) % snapshotColorPalette.length;
+  return color;
+}
 function loadState() {
   const savedState = sessionStorage.getItem('appState');
   if (savedState) {
@@ -449,16 +462,7 @@ function handleSubCanvasDataUpdate(event) {
     }
 }
 
-function toggleFreeze() {
-  isFrozen.value = !isFrozen.value;
-  const isDraggable = !isFrozen.value;
-  for (const node of getNodes.value) {
-    if (node.id !== 'ghost-node') {
-      node.draggable = isDraggable;
-      node.selectable = isDraggable;
-    }
-  }
-}
+
 
 function handleSaveSnapshot(snapshotPayload) {
    const newSnapshot = {
@@ -466,6 +470,7 @@ function handleSaveSnapshot(snapshotPayload) {
     parentNodeId: snapshotPayload.parentNodeId,
     parentNodeTitle: snapshotPayload.parentNodeTitle,
     goal: snapshotPayload.data.goal,
+    color: getNextSnapshotColor(),
     data: snapshotPayload.data
   };
 
@@ -497,14 +502,14 @@ function handleApplySnapshot({ nodeId, snapshotData }) {
   targetNode.data.hasSnapshot = true;
   const newSnapshotCopy = {
     id: `${snapshotIdCounter}`,
-   
+    color: snapshotData.color || getNextSnapshotColor(),
     parentNodeId: targetNode.id,
     parentNodeTitle: targetNode.data.title, 
     // 
     goal: snapshotData.goal,
     data: JSON.parse(JSON.stringify(snapshotData.data))
   };
-
+  targetNode.data.appliedSnapshotColor = newSnapshotCopy.color;
   // Add the new, copied snapshot to the panel
   snapshots.value.push(newSnapshotCopy);
 
@@ -805,6 +810,7 @@ onBeforeUnmount(() => {
             @update-node-data="handleNodeUpdate"
             @content-changed="handleContentChanged"
             @snapshot-dropped="handleApplySnapshot"
+           
           />
         </template>
         <template #node-run="props">
@@ -843,7 +849,7 @@ onBeforeUnmount(() => {
           :is-add-group="isAddingGroup"
           v-model:newNodeColor="newNodeColor"
           :is-show="isShowingRunNode"
-          @toggle-freeze="toggleFreeze"
+         
           @toggle-add-node-mode="toggleAddNodeMode"
           @toggle-add-run-node-mode="toggleAddRunNodeMode"
           @toggle-add-group-mode="toggleAddGroupMode"

@@ -11,10 +11,6 @@ defineProps({
     type: Boolean,
     default: false,
   },
-  isFrozen: {
-    type: Boolean,
-    default: false,
-  },
   newNodeColor: {
     type: String,
     default: '#34495e',
@@ -30,14 +26,20 @@ defineProps({
   isShow: {
     type: Boolean,
     default: true
+  },
+  showRateButton: {
+    type: Boolean,
+    default: false,
   }
 });
 
 // Add a new event for the run node mode
-const emit = defineEmits(['toggle-freeze', 'toggle-add-node-mode', 'toggle-add-run-node-mode', 'update:newNodeColor', 'toggle-add-group-mode']);
+const emit = defineEmits(['toggle-add-node-mode', 'toggle-add-run-node-mode', 'update:newNodeColor', 'toggle-add-group-mode','rate-clicked']);
 
 const colorPicker = ref(null);
-
+function handleRateClick() {
+  emit('rate-clicked');
+}
 function handleAddNodeClick() {
   emit('toggle-add-node-mode');
 }
@@ -45,10 +47,6 @@ function handleAddNodeClick() {
 // Function to handle the new "Run Node" button click
 function handleAddRunNodeClick() {
   emit('toggle-add-run-node-mode');
-}
-
-function handleFreezeClick() {
-  emit('toggle-freeze');
 }
 
 function onColorChange(event) { // 'update:newGroupColor'
@@ -107,22 +105,16 @@ function openColorPicker() {
         <input type="color" ref="colorPicker" :value="newNodeColor" @input="onColorChange" class="hidden-color-input" />
       </button>
     </div>
-
-    <div class="tool-section">
-      <button @click="handleFreezeClick" class="tool-button" :class="{ active: isFrozen }" title="Toggle node movement">
-        <svg v-if="isFrozen" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-        </svg>
-        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-          <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
-        </svg>
-        <span>{{ isFrozen ? ' Unfreeze' : 'Freeze' }}</span>
+<div class="tool-section">
+    <button 
+        v-if="showRateButton" 
+        class="tool-button rate-btn" 
+        @click="handleRateClick" 
+        title="Rate"
+      >
+        <span>Rate LLM responses in this Chain</span>
       </button>
-    </div>
+  </div>
   </div>
 </template>
 
@@ -158,7 +150,7 @@ function openColorPicker() {
   border-radius: 18px;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: Arial;
   font-size: 14px;
   color: #343a40;
 }

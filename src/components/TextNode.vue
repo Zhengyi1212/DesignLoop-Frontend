@@ -117,13 +117,13 @@ function deleteRationale(index) {
   emit('update:rationales', { nodeId: props.id, newRationales: rationales.value });
 }
 
-// ✨ 已修改: 新的函数，用于在列表末尾添加条目
+
 async function addNewRationale() {
   const newRationaleText = '';
-  rationales.value.push(newRationaleText); // 使用 push 添加到末尾
+  rationales.value.push(newRationaleText); // 
   emit('update:rationales', { nodeId: props.id, newRationales: rationales.value });
   
-  // 自动聚焦到新创建的条目上
+
   await nextTick();
   const listItems = listContainerRef.value.querySelectorAll('.rationale-text');
   const newItem = listItems[listItems.length - 1]; // 获取最后一个条目
@@ -177,7 +177,7 @@ const nodeSelectionStyle = computed(() => {
 
         <div class="rationale-actions">
            <button class="action-btn delete-btn" @click.stop="deleteRationale(index)" title="Delete this item">
-            🗑️
+            -
           </button>
           <button class="create-node-btn" @click.stop="handleCreateNode(rationale)" title="Create node from this text">
             + Create Node

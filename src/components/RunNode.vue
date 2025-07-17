@@ -144,9 +144,10 @@ function onShowRating() {
     <div class="node-footer">
         <!-- 新增的评价按钮 -->
         <button v-if="!isRunning && !isEditingContent" class="rating-btn" @click.stop="onShowRating" title="Rate this result">
-            <p>Rate</p>
-        </button>
-
+            <img src="@/assets/icon.png" alt="Click to rate the response" style="width: 28px; height: 28px; vertical-align: middle;">
+            
+          </button>
+          
         <!-- 原有的运行按钮/加载动画 -->
         <button v-if="!isRunning && !isEditingContent" class="run-btn" @click.stop="onRun" title="Run this node">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -238,13 +239,13 @@ function onShowRating() {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 39px;
+    height: 34px;
     padding: 0;
     border: 1px solid #bdc3c7;
     background-color: #ecf0f1;
     color: #7f8c8d;
-    border-radius: 50%; /* 圆形 */
+    border-radius: 10%; /* 圆形 */
     cursor: pointer;
     transition: all 0.2s ease;
 }
@@ -284,7 +285,7 @@ function onShowRating() {
 }
 .content-input {
   width: 100%; height: 100%; border: none; outline: none; resize: none;
-  background-color: #fdf5e6;
+  background-color: #ffffff;
   border-radius: 4px; padding: 8px; box-sizing: border-box;
   font-family: 'JetBrains Mono', sans-serif; font-size: 13px; color: #2c3e50;
 }

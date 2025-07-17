@@ -10,7 +10,7 @@ const props = defineProps({
 });
 
 
-const emit = defineEmits(['delete', 'open-canvas', 'update-node-data', 'snapshot-dropped','content-changed']);
+const emit = defineEmits(['delete', 'open-canvas', 'update-node-data', 'snapshot-dropped', 'content-changed']);
 
 // --- In-place Editing Logic (Unchanged) ---
 const isEditingTitle = ref(false);
@@ -105,13 +105,12 @@ function onOpenCanvas() {
 }
 
 watch(() => props.data.content, (newValue, oldValue) => {
-  // 仅当内容实际发生有意义的改变时才触发
-  // 这可以防止初始加载或无意义的重渲染触发事件
+
   if (newValue !== oldValue && oldValue !== undefined) {
     emit('content-changed', props.id);
   }
 }, {
-  deep: true // 深度监听以处理复杂内容
+  deep: true
 });
 </script>
 
@@ -119,16 +118,10 @@ watch(() => props.data.content, (newValue, oldValue) => {
   <div class="custom-node" :class="{
     'is-editing': isEditingTitle || isEditingContent,
     'is-dragging-over': isDraggingOver  // NEW: Add class for drop feedback
-  }" 
-  :style="[
+  }" :style="[
     id === 'ghost-node' ? { pointerEvents: 'none' } : {},
     nodeSelectionStyle
-  ]"
-   @dblclick="onOpenCanvas" 
-  @dragover.prevent="onDragOver" 
-  @dragleave="onDragLeave" 
-  @drop="onDrop" 
-  @wheel.stop>
+  ]" @dblclick="onOpenCanvas" @dragover.prevent="onDragOver" @dragleave="onDragLeave" @drop="onDrop" @wheel.stop>
     <NodeResizer v-if="id !== 'ghost-node'" :min-width="180" :min-height="180" :visible="selected"
       line-class-name="resizer-line" handle-class-name="resizer-handle" />
 
@@ -143,43 +136,28 @@ watch(() => props.data.content, (newValue, oldValue) => {
 
       <div class="title-container" v-if="!isEditingTitle">
         <strong @click.stop="startEditTitle" title="Click to edit title">
-          {{ data.title || "New Node"}}
+          {{ data.title || "New Node" }}
         </strong>
 
 
       </div>
 
-      <input v-else ref="titleInput" 
-      v-model="data.title"
-       @blur="saveChanges" 
-       @keydown.enter="saveChanges" 
-       @click.stop
-       @mousedown.stop
-       
-        class="title-input" type="text" 
-        
-        />
+      <input v-else ref="titleInput" v-model="data.title" @blur="saveChanges" @keydown.enter="saveChanges" @click.stop
+        @mousedown.stop class="title-input" type="text" />
       <div v-if="data.appliedSnapshotId" class="snapshot-indicator" title="Applied Snapshot">
-        <span class="icon"></span>
+
+        <span class="icon" :style="{ backgroundColor: data.appliedSnapshotColor || '#27ae60' }"></span>
+
         ID:{{ data.appliedSnapshotId }}
       </div>
       <button v-if="!isEditingTitle" class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
 
     </div>
 
-    <div class="node-content"
-     @click.stop="startEditContent"
-     title="Click to edit content"
-     
-     >
-      <p v-if="!isEditingContent" class="content-display">{{ data.content || ''|| 'Click to edit...' }}</p>
-      <textarea v-else ref="contentInput" 
-      v-model="data.content" 
-      @blur="saveChanges" 
-      @click.stop
-      @mousedown.stop
-      placeholder="Click to edit..."
-        class="content-input"></textarea>
+    <div class="node-content" @click.stop="startEditContent" title="Click to edit content">
+      <p v-if="!isEditingContent" class="content-display">{{ data.content || '' || 'Click to edit...' }}</p>
+      <textarea v-else ref="contentInput" v-model="data.content" @blur="saveChanges" @click.stop @mousedown.stop
+        placeholder="Click to edit..." class="content-input"></textarea>
     </div>
 
   </div>
@@ -187,7 +165,7 @@ watch(() => props.data.content, (newValue, oldValue) => {
 
 <style scoped>
 .custom-node {
-  
+
   border: 1px solid #b7c0ce;
   border-radius: 8px;
   font-family: 'JetBrains Mono', sans-serif;
@@ -198,8 +176,8 @@ watch(() => props.data.content, (newValue, oldValue) => {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  overflow: hidden; 
-  
+  overflow: hidden;
+
   background-color: v-bind('props.data.color || "#34495e"');
 }
 
@@ -214,8 +192,9 @@ watch(() => props.data.content, (newValue, oldValue) => {
 .custom-node.is-editing {
   cursor: default;
   overflow: hidden;
-  
+
 }
+
 .custom-node.is-editing .node-content {
   overflow-y: hidden;
 }
@@ -257,16 +236,18 @@ watch(() => props.data.content, (newValue, oldValue) => {
 }
 
 .node-content {
-   
-  height: calc(100% - 40px); 
+
+  height: calc(100% - 40px);
   font-size: 13px;
   color: #2c3e50;
   flex-grow: 1;
   overflow-y: auto;
   cursor: text;
-   background-color: #ffffff; /* 保持 content 区域为白色 */
+  background-color: #ffffff;
+  /* 保持 content 区域为白色 */
   background-clip: content-box;
-  border-radius: 4px; /* 可选：让 content 区域有圆角 */
+  border-radius: 4px;
+  /* 可选：让 content 区域有圆角 */
 }
 
 .content-display {
@@ -284,9 +265,9 @@ watch(() => props.data.content, (newValue, oldValue) => {
   border: none;
   outline: none;
   resize: none;
-  
+
   border-radius: 4px;
-  
+
   box-sizing: border-box;
   font-family: 'JetBrains Mono', sans-serif;
   font-size: 14px;
@@ -333,11 +314,13 @@ watch(() => props.data.content, (newValue, oldValue) => {
 :deep(.vue-flow__handle:hover) {
   background-color: #007bff;
 }
+
 /* 隐藏上下handle但保留功能 */
 .custom-node .vue-flow__handle-top,
 .custom-node .vue-flow__handle-bottom {
-  opacity: 0;  /* 完全透明 */
-  
+  opacity: 0;
+  /* 完全透明 */
+
 
 }
 
@@ -360,8 +343,7 @@ watch(() => props.data.content, (newValue, oldValue) => {
 .node-header .snapshot-indicator .icon {
   width: 12px;
   height: 12px;
-  background-color: #27ae60;
-  /* A nice green color */
+
   border-radius: 50%;
   margin-right: 5px;
   border: 1px solid rgba(0, 0, 0, 0.1);

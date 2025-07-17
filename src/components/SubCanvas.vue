@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onUnmounted, onBeforeUnmount, onMounted, defineAsyncComponent } from 'vue';
+import { ref, watch, onUnmounted, onBeforeUnmount, onMounted, defineAsyncComponent, nextTick } from 'vue';
 import { VueFlow, useVueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
@@ -9,7 +9,8 @@ import CustomEdge from './CustomEdge.vue';
 import ChainNode from './ChainNode.vue';
 import TextNode from './TextNode.vue';
 
-
+// 1. 异步加载 GroupNode 组件
+const GroupNode = defineAsyncComponent(() => import('./GroupNode.vue'));
 const RatingNode = defineAsyncComponent(() => import('./RatingNode.vue'));
 
 const TEXT_NODE_OFFSET_Y = -280;
@@ -26,7 +27,6 @@ const props = defineProps({
   designBackground : { type: String, default: '' },
   designGoal : { type: String, default: '' },
   initialChainList: { type: Array, required: true },
-
   userId: { type: String, required: true },
 });
 
@@ -37,8 +37,9 @@ const editingNode = ref(null);
 const isFrozen = ref(false);
 const nodes = ref(props.initialNodes);
 const edges = ref(props.initialEdges);
-let subNodeIdCounter = ref(props.initialNodes.length);
+let subNodeIdCounter = ref(props.initialNodes.length > 0 ? Math.max(...props.initialNodes.map(n => parseInt(n.id.split('-').pop()) || 0)) + 1 : 0);
 const isAddingNode = ref(false);
+const isAddingGroup = ref(false); // 状态：是否正在添加分组
 const isShowingRunNode = ref(false);
 const vueFlowRef = ref(null);
 const chainList = ref(null || props.initialChainList)
@@ -49,7 +50,7 @@ const isSubCanvasRunning = ref(false);
 const isSaveButtonRunning = ref(false)
 const runningSubNodeId = ref(null);
 const runBtnRef = ref(null);
-const newNodeColor = ref('#ffffff');
+const newNodeColor = ref('#34495e');
 
 const isGeneratingRationaleNodeId = ref(null);
 
@@ -62,27 +63,18 @@ function handleRatingClose(nodeId) {
 
 
 async function handleRatingSubmit(payload) {
-
-  // {
- 
-  //   ratings: { accuracy: 3, relevance: 3, clarity: 3 },
-  
-  // }
   console.log('Submitting SubCanvas rating to backend:', payload);
 
   try {
     const response = await fetch("/api/submit-rating-subcanvas", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-   
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ratings: payload.ratings,
         instruction: payload.context.instruction,
         goal: payload.context.goal,
         chainList: payload.context.chainList,
-        user_id: props.userId, 
+        user_id: props.userId,
       }),
     });
 
@@ -96,7 +88,6 @@ async function handleRatingSubmit(payload) {
   } catch (error) {
     console.error("Failed to submit SubCanvas rating:", error);
   } finally {
-   
     subflow.removeNodes([payload.nodeId]);
   }
 }
@@ -104,31 +95,19 @@ async function handleRatingSubmit(payload) {
 
 function handleShowSubCanvasRating() {
     if (!vueFlowRef.value) return;
-
-   
     const { x, y, zoom } = subflow.getViewport();
-  
     const { width } = vueFlowRef.value.dimensions;
-
-
-    const ratingNodeWidth = 260; 
-    const padding = 20; 
-
-   
+    const ratingNodeWidth = 260;
+    const padding = 20;
     const position = {
-       
         x: x + (width / zoom) - ratingNodeWidth - padding*2,
-        // 
         y: y + padding
     };
-
-    
     subflow.addNodes([{
         id: `rating-subcanvas-${props.nodeId}`,
         type: 'rating',
         position,
         data: {
-          
             context: {
                 instruction: instruction.value,
                 goal: goal.value,
@@ -164,12 +143,11 @@ function handleCreateNodeFromText(text, sourceTextNode) {
 }
 
 watch(chainList, (newChainList) => {
-   
     emit('update:data', {
         nodeId: props.nodeId,
         instruction: instruction.value,
         goal: goal.value,
-        chain: newChainList, 
+        chain: newChainList,
     });
 }, { deep: true });
 
@@ -212,51 +190,109 @@ async function handleSaveButton() {
   }
 }
 
-function placeNodeOnClick(event) {
-  if (!isAddingNode.value || event.target.closest('.vue-flow__controls, .tool-button')) return;
-  const ghostNode = subflow.findNode('ghost-node');
-  if (!ghostNode) return;
-  const newNode = {
-    id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
-    type: 'chain',
-    position: { ...ghostNode.position },
-    width: 120,
-    height: 80,
-    data: { content: '', color: newNodeColor.value, connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] }, isManual: true },
-  };
-  subflow.addNodes([newNode]);
-  toggleAddNodeMode();
+// 2. 将添加节点/分组的逻辑集中管理
+function setAddMode(mode) {
+    isAddingNode.value = mode === 'node';
+    isAddingGroup.value = mode === 'group';
+    updateEventListeners();
 }
 
-function toggleAddNodeMode() {
-  isAddingNode.value = !isAddingNode.value;
-  const flowElement = vueFlowRef.value?.$el;
-  if (!flowElement) return;
-  if (isAddingNode.value) {
-    flowElement.addEventListener('click', placeNodeOnClick, true);
-  } else {
+function toggleAddNodeMode() { setAddMode(isAddingNode.value ? null : 'node'); }
+function toggleAddGroupMode() { setAddMode(isAddingGroup.value ? null : 'group'); }
+
+function updateEventListeners() {
+    const flowElement = vueFlowRef.value?.$el;
+    if (!flowElement) return;
     flowElement.removeEventListener('click', placeNodeOnClick, true);
-    subflow.removeNodes(['ghost-node']);
-  }
+    if (isAddingNode.value || isAddingGroup.value) {
+        flowElement.addEventListener('click', placeNodeOnClick, true);
+    } else {
+        subflow.removeNodes(['ghost-node']);
+    }
 }
 
 subflow.onPaneMouseMove((event) => {
-  if (!isAddingNode.value) return;
+  // 3. 更新 onPaneMouseMove 以处理分组预览
+  if (!isAddingNode.value && !isAddingGroup.value) return;
+
   const flowRect = vueFlowRef.value.$el.getBoundingClientRect();
   const relativeMousePos = { x: event.clientX - flowRect.left, y: event.clientY - flowRect.top };
   const position = subflow.project(relativeMousePos);
-  const adjustedPosition = { x: position.x - 60, y: position.y - 40 };
+
   const ghostNode = subflow.findNode('ghost-node');
+  let ghostType = 'chain';
+  let ghostData = {};
+  let ghostDimensions = { width: 120, height: 80 };
+  let ghostPosition = { x: position.x - ghostDimensions.width / 2, y: position.y - ghostDimensions.height / 2 };
+
+
+  if (isAddingGroup.value) {
+      ghostType = 'group';
+      ghostData = { label: 'Group', color: newNodeColor.value };
+      ghostDimensions = { width: 380, height: 260 };
+      ghostPosition = { x: position.x - ghostDimensions.width / 2, y: position.y - ghostDimensions.height / 2 };
+  } else { // isAddingNode
+      ghostType = 'chain';
+      ghostData = { content: 'Click to place', color: newNodeColor.value, isManual: true };
+      ghostDimensions = { width: 120, height: 80 };
+      ghostPosition = { x: position.x - ghostDimensions.width / 2, y: position.y - ghostDimensions.height / 2 };
+  }
+
+
   if (ghostNode) {
-    ghostNode.position = adjustedPosition;
-    ghostNode.data.color = newNodeColor.value;
+    ghostNode.position = ghostPosition;
+    ghostNode.data = ghostData;
+    ghostNode.type = ghostType;
+    ghostNode.width = ghostDimensions.width;
+    ghostNode.height = ghostDimensions.height;
   } else {
     subflow.addNodes([{
-      id: 'ghost-node', type: 'chain', position: adjustedPosition, width: 120, height: 80,
-      data: { content: 'Click to place', color: newNodeColor.value }, class: 'ghost-node',
+      id: 'ghost-node', type: ghostType, position: ghostPosition, ...ghostDimensions,
+      data: ghostData, class: 'ghost-node',
     }]);
   }
 });
+
+
+function placeNodeOnClick(event) {
+  // 4. 更新 placeNodeOnClick 以创建分组节点
+  if (event.target.closest('.vue-flow__controls, .tool-button')) return;
+  const ghostNode = subflow.findNode('ghost-node');
+  if (!ghostNode) return;
+
+  let newNode;
+  const baseNode = {
+      id: `sub-node-${props.nodeId}-${subNodeIdCounter.value++}`,
+      position: { ...ghostNode.position },
+      data: { color: newNodeColor.value }
+  };
+
+  if (isAddingGroup.value) {
+      newNode = {
+          ...baseNode,
+          type: 'group',
+          zIndex: 0,
+          width: 400,
+          height: 300,
+          data: { ...baseNode.data, label: 'My Group' }
+      };
+  } else if (isAddingNode.value) {
+      newNode = {
+          ...baseNode,
+          type: 'chain',
+          width: 120,
+          height: 80,
+          data: { ...baseNode.data, content: '', connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] }, isManual: true },
+      };
+  }
+
+  if(newNode) {
+    subflow.addNodes([newNode]);
+  }
+  
+  nextTick(() => { setAddMode(null); });
+}
+
 
 function handleDuplicateSubNode() {
   const selectedNodes = subflow.getSelectedNodes.value;
@@ -558,7 +594,7 @@ onUnmounted(() => {
       <div class="sub-canvas-header" @mousedown="onHeaderMouseDown">
         <span class="title">✏️ {{ nodeName }}</span>
         <div class="header-actions">
-           <button class="save-btn" @click="handleSaveButton" :disabled="isSaveButtonRunning" title="Save Sub-Canvas as a reusable snapshot">
+           <button class="save-btn" @click="handleSaveButton" :disabled="isSaveButtonRunning" title="Save this LLM Chain">
             <div v-if="isSaveButtonRunning" class="spinner"></div>
             <span v-else>Save</span>
           </button>
@@ -576,7 +612,7 @@ onUnmounted(() => {
             <textarea id="instruction" v-model="instruction" @blur="onFieldBlur" :placeholder="'描述推理应如何展开，如线性推理、替代推理、特定视角推理或分支推理'" rows="3"></textarea>
           </div>
         </div>
-        
+
         <div class="run-button-wrapper">
           <button ref="runBtnRef" class="run-btn" @click="handleSubCanvasRun" :disabled="isSubCanvasRunning" title="Run Sub-Canvas Logic">
             <div v-if="isSubCanvasRunning" class="spinner"></div>
@@ -584,9 +620,6 @@ onUnmounted(() => {
               <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" />
             </svg>
             <span>Run</span>
-          </button>
-          <button class="rating-btn-sub" @click="handleShowSubCanvasRating" :disabled="isSubCanvasRunning" title="Rate this configuration">
-             <p>Rate</p>
           </button>
         </div>
       </div>
@@ -600,6 +633,13 @@ onUnmounted(() => {
         ref="vueFlowRef"
         @connect="onSubCanvasConnect"
         >
+          <!-- 5. 添加 GroupNode 的模板 -->
+          <template #node-group="groupProps">
+            <GroupNode
+              v-bind="groupProps"
+              @delete="subflow.removeNodes([$event])"
+            />
+          </template>
           <template #node-rating="props">
             <RatingNode
               v-bind="props"
@@ -607,8 +647,6 @@ onUnmounted(() => {
               @submit="handleRatingSubmit"
             />
           </template>
-
-          <!-- Other node templates -->
           <template #node-chain="chainProps">
             <ChainNode
               v-bind="chainProps"
@@ -634,7 +672,16 @@ onUnmounted(() => {
         </VueFlow>
       </div>
       <div class="sub-canvas-toolbar-wrapper">
-        <Toolbar :is-frozen="isFrozen" :is-adding-node="isAddingNode" :is-show="isShowingRunNode" v-model:newNodeColor="newNodeColor" @toggle-freeze="toggleFreeze" @toggle-add-node-mode="toggleAddNodeMode" />
+        <Toolbar
+        :is-add-group="isAddingGroup"
+        :is-adding-node="isAddingNode"
+        :is-show="isShowingRunNode"
+        v-model:newNodeColor="newNodeColor"
+         @toggle-add-group-mode="toggleAddGroupMode"
+         @toggle-add-node-mode="toggleAddNodeMode"
+         :show-rate-button="true"
+         @rate-clicked="handleShowSubCanvasRating"
+         />
       </div>
     </div>
     <EditModal :show="isEditModalVisible" :node-data="editingNode" @close="isEditModalVisible = false" @save="handleNodeSave" />
@@ -746,10 +793,10 @@ onUnmounted(() => {
 }
 .run-button-wrapper{
   display: flex;
-  flex-direction: column; /* 让按钮垂直排列 */
+  flex-direction: column;
   align-items: center;
-  justify-content: center; /* 垂直居中 */
-  gap: 8px; /* 按钮之间的间距 */
+  justify-content: center;
+  gap: 8px;
   padding: 10px 20px;
 }
 .run-btn {
@@ -795,13 +842,13 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 .run-btn {
-  border: 1px solid #28a745;
-  background-color: #28a745;
+  border: 1px solid #5661F6;
+  background-color: #5661F6;
   color: white;
   min-width: 80px;
 }
 .run-btn:hover:not(:disabled) {
-  background-color: #218838;
+  background-color: #323ee6;
   border-color: #1e7e34;
 }
 .run-btn:disabled {
@@ -809,31 +856,7 @@ onUnmounted(() => {
   border-color: #6c757d;
   cursor: not-allowed;
 }
-.rating-btn-sub {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 80px; /* 与 Run 按钮同宽 */
-    height: 28px;
-    padding: 0;
-    border: 1px solid #bdc3c7;
-    background-color: #ecf0f1;
-    color: #7f8c8d;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-.rating-btn-sub:hover:not(:disabled) {
-    background-color: #bdc3c7;
-    color: white;
-    border-color: #95a5a6;
-}
-.rating-btn-sub:disabled {
-    background-color: #e9ecef;
-    border-color: #e9ecef;
-    color: #bdc3c7;
-    cursor: not-allowed;
-}
+
 
 .spinner {
   border: 3px solid rgba(255, 255, 255, 0.3);

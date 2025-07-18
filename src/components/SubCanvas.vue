@@ -161,7 +161,7 @@ async function handleTextNodeSendData({ id, title, rationales, parent_content })
 
   try {
     // 3. 发送请求到后端
-    const response = await fetch("http://localhost:7001/textnode-analysis", {
+    const response = await fetch("/api/textnode-analysis", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -547,7 +547,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             design_goal: props.designGoal
         };
 
-        const response = await fetch('http://localhost:7001/generate-rationale', {
+        const response = await fetch('/api/generate-rationale', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -641,7 +641,7 @@ async function handleSubCanvasRun() {
         if (edgesToRemove.length > 0) subflow.removeEdges(edgesToRemove.map(e => e.id));
         subflow.removeNodes(nodeIdsToRemove);
     }
-    const url = "http://localhost:7001/generate-thinking-chain";
+    const url = "/api/generate-thinking-chain";
     const payload = {
       design_background: props.designBackground, design_goal: props.designGoal,
       parent_node_content: props.parentNodeContent, parent_node_title : props.parentNodeTitle,

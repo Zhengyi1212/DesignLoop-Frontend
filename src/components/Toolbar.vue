@@ -105,10 +105,10 @@ function openColorPicker() {
         <input type="color" ref="colorPicker" :value="newNodeColor" @input="onColorChange" class="hidden-color-input" />
       </button>
     </div>
-<div class="tool-section">
+    <div class="tool-section">
     <button 
         v-if="showRateButton" 
-        class="tool-button rate-btn" 
+        class="tool-button-rate" 
         @click="handleRateClick" 
         title="Rate"
       >
@@ -139,7 +139,8 @@ function openColorPicker() {
   gap: 15px;
 }
 
-.tool-button {
+.tool-button, 
+.tool-button-rate{
   display: flex;
   align-items: center;
   gap: 8px;
@@ -151,7 +152,23 @@ function openColorPicker() {
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: Arial;
-  font-size: 14px;
+  font-size: 13px;
+  color: #343a40;
+}
+
+.toolbar-container .tool-section .tool-button-rate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height : 30px;
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  background-color: #fff;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: Arial;
+  font-size: 13px;
   color: #343a40;
 }
 

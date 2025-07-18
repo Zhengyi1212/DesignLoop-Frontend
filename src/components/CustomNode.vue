@@ -3,20 +3,189 @@ import { computed, ref, nextTick, watch } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
+defineOptions({
+  inheritAttrs: false,
+});
+
 const props = defineProps({
   id: { type: String, required: true },
-  data: { type: Object, required: true },
+  data: {
+    type: Object,
+    required: true,
+    default: () => ({ rationales: [], content: '' }),
+  },
   selected: { type: Boolean, default: false },
 });
 
-
 const emit = defineEmits(['delete', 'open-canvas', 'update-node-data', 'snapshot-dropped', 'content-changed']);
 
-// --- In-place Editing Logic (Unchanged) ---
+// --- 核心逻辑：rationales 和 content 同步 ---
+const rationales = ref([]);
+const listContainerRef = ref(null);
+
+// ✨ 新增: 计算属性，用于从 rationales 数组实时生成 content 字符串
+// The computed property to generate the content string from the rationales array in real-time.
+const content = computed(() => rationales.value.join('\n'));
+
+// ✨ 修改: 智能初始化逻辑
+// On creation, if `rationales` is provided, use it. Otherwise, if `content` is provided, use that.
+// This ensures compatibility with nodes created with either `content` or `rationales`.
+if (props.data.rationales && props.data.rationales.length > 0) {
+  rationales.value = [...props.data.rationales];
+} else if (props.data.content) {
+  rationales.value = [props.data.content];
+} else {
+  rationales.value = [''];
+}
+
+// ✨ 修改: 监听外部 rationales 变化 (例如应用快照)
+// Watch for external changes to rationales (e.g., applying a snapshot).
+watch(() => props.data.rationales, (newRationales) => {
+  // 通过比较JSON字符串避免不必要更新和无限循环
+  // Avoid unnecessary updates and infinite loops by comparing JSON strings.
+  if (newRationales && JSON.stringify(newRationales) !== JSON.stringify(rationales.value)) {
+    rationales.value = newRationales;
+    // 确保至少有一个空的编辑块
+    // Ensure there is at least one empty block for editing.
+    if (rationales.value.length === 0) {
+      rationales.value.push('');
+    }
+  }
+}, { deep: true });
+
+
+// --- 拖拽排序逻辑 (保持不变) ---
+const isDragging = ref(false);
+const draggedIndex = ref(null);
+const dragOverIndex = ref(null);
+const draggedItemClone = ref(null);
+const cloneStyle = ref({});
+
+function handleMouseDown(event, index) {
+  if (event.target.closest('.rationale-actions') || event.target.isContentEditable) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  isDragging.value = true;
+  draggedIndex.value = index;
+  const itemElement = event.currentTarget;
+  const rect = itemElement.getBoundingClientRect();
+  draggedItemClone.value = {
+    text: rationales.value[index],
+    width: rect.width,
+    height: rect.height,
+  };
+  cloneStyle.value = {
+    position: 'fixed',
+    top: `${rect.top}px`,
+    left: `${rect.left}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    pointerEvents: 'none',
+    zIndex: 9999,
+  };
+  window.addEventListener('mousemove', handleMouseMove);
+  window.addEventListener('mouseup', handleMouseUp);
+}
+
+function handleMouseMove(event) {
+  if (!isDragging.value) return;
+  const newTop = event.clientY - (draggedItemClone.value.height / 2);
+  const newLeft = event.clientX - (draggedItemClone.value.width / 2);
+  cloneStyle.value.top = `${newTop}px`;
+  cloneStyle.value.left = `${newLeft}px`;
+  const elements = Array.from(listContainerRef.value.children);
+  dragOverIndex.value = null;
+  for (let i = 0; i < elements.length; i++) {
+    if (i === draggedIndex.value) continue;
+    const el = elements[i];
+    const rect = el.getBoundingClientRect();
+    if (event.clientY > rect.top && event.clientY < rect.bottom) {
+      dragOverIndex.value = i;
+      break;
+    }
+  }
+}
+
+function handleMouseUp() {
+  if (!isDragging.value) return;
+  if (dragOverIndex.value !== null && dragOverIndex.value !== draggedIndex.value) {
+    const itemToMove = rationales.value.splice(draggedIndex.value, 1)[0];
+    rationales.value.splice(dragOverIndex.value, 0, itemToMove);
+    emitUpdate();
+  }
+  isDragging.value = false;
+  draggedIndex.value = null;
+  dragOverIndex.value = null;
+  draggedItemClone.value = null;
+  window.removeEventListener('mousemove', handleMouseMove);
+  window.removeEventListener('mouseup', handleMouseUp);
+}
+
+// --- 文字块管理 (保持不变) ---
+async function addNewRationale(focus = true) {
+  rationales.value.push('');
+  emitUpdate();
+
+  if (focus) {
+    await nextTick();
+    const listItems = listContainerRef.value.querySelectorAll('.rationale-text');
+    const newItem = listItems[listItems.length - 1];
+    if (newItem) {
+      newItem.focus();
+    }
+  }
+}
+
+function deleteRationale(index) {
+  if (rationales.value.length === 1) {
+    rationales.value[0] = '';
+  } else {
+    rationales.value.splice(index, 1);
+  }
+  emitUpdate();
+}
+
+function updateRationaleText(event, index) {
+  const newText = event.target.innerText;
+  if (rationales.value[index] !== newText) {
+    rationales.value[index] = newText;
+    emitUpdate();
+  }
+}
+
+async function handleKeyDown(event, index) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+     const isLastItem = index === rationales.value.length - 1;
+     const currentText = event.target.innerText;
+     if (isLastItem && currentText.endsWith('\n\n')) {
+        event.preventDefault();
+        rationales.value[index] = currentText.trimEnd();
+        emitUpdate();
+        await nextTick();
+        addNewRationale(true);
+     }
+  }
+}
+
+// --- ✨ 修改: 统一的数据更新事件 ---
+function emitUpdate() {
+  emit('update-node-data', {
+    id: props.id,
+    data: {
+      ...props.data,
+      rationales: rationales.value,
+      content: content.value, // ✨ 核心: 总是将同步后的 content 字符串包含在更新中
+    }
+  });
+  emit('content-changed', props.id);
+}
+
+
+// --- 原有的编辑和拖放逻辑 (保持不变) ---
 const isEditingTitle = ref(false);
-const isEditingContent = ref(false);
 const titleInput = ref(null);
-const contentInput = ref(null);
 
 function startEditTitle() {
   if (props.id === 'ghost-node') return;
@@ -27,35 +196,19 @@ function startEditTitle() {
   });
 }
 
-function startEditContent() {
-  if (props.id === 'ghost-node') return;
-  isEditingContent.value = true;
-  nextTick(() => {
-    contentInput.value?.focus();
-  });
-}
-
-function saveChanges() {
-  emit('update-node-data', {
-    id: props.id,
-    data: {
-      title: props.data.title,
-      content: props.data.content,
-    }
-  });
+function saveTitle() {
   isEditingTitle.value = false;
-  isEditingContent.value = false;
+  // emitUpdate will handle sending the title change along with other data
+  emitUpdate();
 }
 
-// --- NEW: Drag and Drop Snapshot Logic ---
 const isDraggingOver = ref(false);
 
 function onDragOver(event) {
   event.preventDefault();
-  // Provide visual feedback only if the dragged item is a snapshot.
   if (event.dataTransfer.types.includes('application/json/snapshot')) {
     isDraggingOver.value = true;
-    event.dataTransfer.dropEffect = 'copy'; // Show a 'copy' cursor
+    event.dataTransfer.dropEffect = 'copy';
   }
 }
 
@@ -66,21 +219,17 @@ function onDragLeave() {
 function onDrop(event) {
   event.preventDefault();
   isDraggingOver.value = false;
-
   const snapshotDataString = event.dataTransfer.getData('application/json/snapshot');
   if (!snapshotDataString) return;
-
   try {
     const snapshotData = JSON.parse(snapshotDataString);
-    console.log(snapshotData.goal)
-    // Emit an event to the parent (App.vue) with the node's ID and the dropped data.
     emit('snapshot-dropped', { nodeId: props.id, snapshotData });
   } catch (e) {
     console.error("Failed to parse snapshot data on drop:", e);
   }
 }
 
-// --- Computed Properties & Functions (Unchanged) ---
+// --- 计算属性与原有函数 (保持不变) ---
 const nodeHeaderStyle = computed(() => ({
   backgroundColor: props.data.color || '#34495e'
 }));
@@ -99,30 +248,21 @@ function onDelete() {
 }
 
 function onOpenCanvas() {
-  if (isEditingTitle.value || isEditingContent.value) return;
+  if (isEditingTitle.value) return;
   if (props.id === 'ghost-node') return;
   emit('open-canvas', props.id);
 }
-
-watch(() => props.data.content, (newValue, oldValue) => {
-
-  if (newValue !== oldValue && oldValue !== undefined) {
-    emit('content-changed', props.id);
-  }
-}, {
-  deep: true
-});
 </script>
 
 <template>
   <div class="custom-node" :class="{
-    'is-editing': isEditingTitle || isEditingContent,
-    'is-dragging-over': isDraggingOver  // NEW: Add class for drop feedback
+    'is-editing-title': isEditingTitle,
+    'is-dragging-over': isDraggingOver
   }" :style="[
     id === 'ghost-node' ? { pointerEvents: 'none' } : {},
     nodeSelectionStyle
   ]" @dblclick="onOpenCanvas" @dragover.prevent="onDragOver" @dragleave="onDragLeave" @drop="onDrop" @wheel.stop>
-    <NodeResizer v-if="id !== 'ghost-node'" :min-width="180" :min-height="180" :visible="selected"
+    <NodeResizer v-if="id !== 'ghost-node'" :min-width="200" :min-height="180" :visible="selected"
       line-class-name="resizer-line" handle-class-name="resizer-handle" />
 
     <template v-if="id !== 'ghost-node'">
@@ -133,39 +273,62 @@ watch(() => props.data.content, (newValue, oldValue) => {
     </template>
 
     <div class="node-header" :style="nodeHeaderStyle">
-
       <div class="title-container" v-if="!isEditingTitle">
         <strong @click.stop="startEditTitle" title="Click to edit title">
           {{ data.title || "New Node" }}
         </strong>
-
-
       </div>
-
-      <input v-else ref="titleInput" v-model="data.title" @blur="saveChanges" @keydown.enter="saveChanges" @click.stop
+      <input v-else ref="titleInput" v-model="data.title" @blur="saveTitle" @keydown.enter="saveTitle" @click.stop
         @mousedown.stop class="title-input" type="text" />
       <div v-if="data.appliedSnapshotId" class="snapshot-indicator" title="Applied Snapshot">
-
         <span class="icon" :style="{ backgroundColor: data.appliedSnapshotColor || '#27ae60' }"></span>
-
         ID:{{ data.appliedSnapshotId }}
       </div>
       <button v-if="!isEditingTitle" class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
-
     </div>
 
-    <div class="node-content" @click.stop="startEditContent" title="Click to edit content">
-      <p v-if="!isEditingContent" class="content-display">{{ data.content || '' || 'Click to edit...' }}</p>
-      <textarea v-else ref="contentInput" v-model="data.content" @blur="saveChanges" @click.stop @mousedown.stop
-        placeholder="Click to edit..." class="content-input"></textarea>
-    </div>
+    <div class="rationales-list" ref="listContainerRef">
+      <div
+        v-for="(rationale, index) in rationales"
+        :key="index"
+        class="rationale-item"
+        :class="{
+          'is-dragging-placeholder': isDragging && draggedIndex === index,
+          'is-drop-target': isDragging && dragOverIndex === index
+        }"
+        @mousedown="handleMouseDown($event, index)"
+      >
+        <div
+          class="rationale-text"
+          contenteditable="true"
+          @blur="updateRationaleText($event, index)"
+          @keydown="handleKeyDown($event, index)"
+          @click.stop
+          @mousedown.stop
+          v-text="rationale"
+        ></div>
 
+        <div class="rationale-actions">
+           <button class="action-btn delete-btn-item" @click.stop="deleteRationale(index)" title="Delete this item">
+            -
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    
   </div>
+
+  <Teleport to="body">
+    <div v-if="draggedItemClone" class="rationale-item rationale-item-clone" :style="cloneStyle">
+      <div class="rationale-text">{{ draggedItemClone.text }}</div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
+/* --- 基础样式 (大部分来自原 CustomNode) --- */
 .custom-node {
-
   border: 1px solid #b7c0ce;
   border-radius: 8px;
   font-family: 'JetBrains Mono', sans-serif;
@@ -177,11 +340,9 @@ watch(() => props.data.content, (newValue, oldValue) => {
   height: 100%;
   width: 100%;
   overflow: hidden;
-
-  background-color: v-bind('props.data.color || "#34495e"');
+  background-color: #ffffff; /* 设置一个白色背景 */
 }
 
-/* NEW: Style for when a snapshot is being dragged over the node */
 .custom-node.is-dragging-over {
   outline: 3px dashed #2ecc71;
   outline-offset: 4px;
@@ -189,14 +350,8 @@ watch(() => props.data.content, (newValue, oldValue) => {
   transform: scale(1.02);
 }
 
-.custom-node.is-editing {
+.custom-node.is-editing-title {
   cursor: default;
-  overflow: hidden;
-
-}
-
-.custom-node.is-editing .node-content {
-  overflow-y: hidden;
 }
 
 .vue-flow__node-selected .custom-node {
@@ -212,6 +367,7 @@ watch(() => props.data.content, (newValue, oldValue) => {
   justify-content: space-between;
   align-items: center;
   transition: background-color 0.2s;
+  flex-shrink: 0;
 }
 
 .node-header strong {
@@ -228,50 +384,11 @@ watch(() => props.data.content, (newValue, oldValue) => {
   border: none;
   outline: none;
   font-family: 'JetBrains Mono', sans-serif;
-  font-size: 1em;
+  font-size: 13px;
   font-weight: bold;
   width: 100%;
   padding: 0;
   margin: 0;
-}
-
-.node-content {
-
-  height: calc(100% - 40px);
-  font-size: 13px;
-  color: #2c3e50;
-  flex-grow: 1;
-  overflow-y: auto;
-  cursor: text;
-  background-color: #ffffff;
-  /* 保持 content 区域为白色 */
-  background-clip: content-box;
-  border-radius: 4px;
-  /* 可选：让 content 区域有圆角 */
-}
-
-.content-display {
-  padding: 12px;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  min-height: 20px;
-}
-
-.content-input {
-  padding: 12px;
-  width: 100%;
-  height: 100%;
-  border: none;
-  outline: none;
-  resize: none;
-
-  border-radius: 4px;
-
-  box-sizing: border-box;
-  font-family: 'JetBrains Mono', sans-serif;
-  font-size: 14px;
-  color: #2c3e50;
 }
 
 .delete-btn {
@@ -288,41 +405,158 @@ watch(() => props.data.content, (newValue, oldValue) => {
 
 .delete-btn:hover {
   opacity: 1;
-  color: red;
+  color: #e74c3c;
 }
 
-:deep(.resizer-handle) {
-  width: 8px;
-  height: 8px;
-  background-color: #6366F1;
-  border-radius: 2px;
-  border: 2px solid white;
+/* --- 新增/移植的 rationales 列表样式 (来自 TextNode.vue) --- */
+.rationales-list {
+  flex-grow: 1;
+  padding: 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: #ffffff;
 }
 
-:deep(.resizer-line) {
-  border-color: #6366F1;
-  border-width: 2px;
+.rationales-list::-webkit-scrollbar { width: 6px; }
+.rationales-list::-webkit-scrollbar-track { background: #f1f1f1; }
+.rationales-list::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+.rationales-list::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+.rationale-item {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #374151;
+  cursor: grab;
+  position: relative;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+  padding-bottom: 28px; /* 为操作按钮留出空间 */
+}
+.rationale-item:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
-:deep(.vue-flow__handle) {
-  width: 12px;
-  height: 11px;
-  background-color: #9e9e9e;
-  border: 1px solid #f0f0f0;
+.rationale-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  cursor: text;
+  min-height: 1.2em; /* 确保空块也有高度 */
+}
+.rationale-text:focus {
+  outline: none;
+  background-color: #eff6ff;
+  box-shadow: 0 0 0 2px #3b82f6 inset;
 }
 
-:deep(.vue-flow__handle:hover) {
-  background-color: #007bff;
-}
-
-/* 隐藏上下handle但保留功能 */
-.custom-node .vue-flow__handle-top,
-.custom-node .vue-flow__handle-bottom {
+.rationale-actions {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   opacity: 0;
-  /* 完全透明 */
-
-
+  transition: opacity 0.2s ease-in-out;
 }
+
+.rationale-item:hover .rationale-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  background-color: #e5e7eb;
+  color: #4b5563;
+  border: 1px solid #d1d5db;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 12px;
+  cursor: pointer;
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.action-btn:hover {
+  background-color: #d1d5db;
+  border-color: #9ca3af;
+}
+.delete-btn-item:hover {
+  background-color: #fee2e2;
+  color: #ef4444;
+  border-color: #fca5a5;
+  
+}
+
+.add-rationale-footer {
+  padding: 4px 8px;
+  border-top: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  flex-shrink: 0;
+}
+
+.add-new-btn {
+  width: 100%;
+  background-color: transparent;
+  color: #6b7280;
+  border: 1px dashed #d1d5db;
+  border-radius: 6px;
+  padding: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.add-new-btn:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+/* --- 拖拽占位符和克隆项的样式 (来自 TextNode.vue) --- */
+.rationale-item-clone {
+  cursor: grabbing;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  transform: scale(1.05);
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', sans-serif;
+  color: #334155;
+}
+.is-dragging-placeholder {
+  background-color: #f0f9ff;
+  border: 1px dashed #bae6fd;
+}
+.is-dragging-placeholder > * {
+  opacity: 0;
+}
+.is-drop-target {
+  background-color: #dbeafe;
+  border-color: #3b82f6;
+}
+
+/* --- 其余样式 (保持不变) --- */
+:deep(.resizer-handle) { 
+  width: 8px; height: 8px; 
+  background-color: transparent; border-radius: 2px; border: 2px solid transparent; }
+:deep(.resizer-line) { border-color: transparent; border-width: 2px; }
+:deep(.vue-flow__handle) { width: 12px; height: 11px; background-color: #9e9e9e; border: 1px solid #f0f0f0; }
+:deep(.vue-flow__handle:hover) { background-color: #007bff; }
+.custom-node .vue-flow__handle-top,
+.custom-node .vue-flow__handle-bottom { opacity: 0; }
 
 .node-header .snapshot-indicator {
   position: absolute;
@@ -337,13 +571,10 @@ watch(() => props.data.content, (newValue, oldValue) => {
   font-weight: bold;
   color: #34495e;
   pointer-events: none;
-  /* Allows clicks to pass through to the node */
 }
-
 .node-header .snapshot-indicator .icon {
   width: 12px;
   height: 12px;
-
   border-radius: 50%;
   margin-right: 5px;
   border: 1px solid rgba(0, 0, 0, 0.1);

@@ -1,14 +1,18 @@
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue';
+import { ref, computed, nextTick, watch, onMounted } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
+
+defineOptions({
+  inheritAttrs: false,
+});
 
 const props = defineProps({
   id: { type: String, required: true },
   data: {
     type: Object,
     required: true,
-    default: () => ({ rationales: [] }),
+    default: () => ({ title: 'New Rationale', rationales: [] , parent_content:'',}),
   },
   selected: { type: Boolean, default: false },
   dragging: Boolean,
@@ -30,15 +34,95 @@ const props = defineProps({
   dragHandle: String,
 });
 
-const emit = defineEmits(['create-node-from-text', 'update:rationales', 'updateNodeInternals']);
+const emit = defineEmits(['create-node-from-text', 'update-node-data', 'regenerate']);
 
+// --- State ---
+const title = ref(props.data.title || 'New Rationale');
 const rationales = ref(props.data.rationales || []);
+const parent_content = ref(props.data.parent_content || '')
 const listContainerRef = ref(null);
+const isEditingTitle = ref(false);
+const titleInput = ref(null);
+const isSending = ref(false);
 
-watch(() => props.data.rationales, (newRationales) => {
-  rationales.value = newRationales || [];
+// --- Watchers ---
+watch(() => props.data, (newData) => {
+  title.value = newData.title || 'New Rationale';
+  rationales.value = newData.rationales || [];
+  adjustAllItemsHeight();
 }, { deep: true });
 
+// --- Core Functions ---
+function emitDataUpdate() {
+  emit('update-node-data', {
+    id: props.id,
+    data: {
+      title: title.value,
+      rationales: rationales.value,
+    }
+  });
+}
+
+function startEditTitle() {
+  isEditingTitle.value = true;
+  nextTick(() => {
+    titleInput.value?.focus();
+    titleInput.value?.select();
+  });
+}
+
+function saveTitle() {
+  isEditingTitle.value = false;
+  if (!title.value.trim()) {
+    title.value = 'Untitled Rationale';
+  }
+  emitDataUpdate();
+}
+
+function handleSendData() {
+  if (isSending.value) return;
+  isSending.value = true;
+  emit('regenerate', {
+    id: props.id,
+    title: title.value,
+    rationales: rationales.value,
+    parent_content: parent_content.value,
+  });
+  // Simulate API call duration
+  setTimeout(() => { isSending.value = false; }, 2000);
+}
+
+// --- Rationale Item Management (Height, Dragging, CRUD) ---
+function adjustItemHeight(textElement) {
+  if (!textElement) return;
+  const itemElement = textElement.parentElement;
+  if (!itemElement) return;
+  textElement.style.height = 'auto';
+  const minHeight = 80;
+  const requiredHeight = textElement.scrollHeight + 60;
+  itemElement.style.height = `${Math.max(minHeight, requiredHeight)}px`;
+}
+const adjustAllItemsHeight = () => {
+  nextTick(() => {
+    if (listContainerRef.value) {
+      const textDivs = listContainerRef.value.querySelectorAll('.rationale-text');
+      textDivs.forEach(adjustItemHeight);
+    }
+  });
+};
+onMounted(adjustAllItemsHeight);
+
+function handleTextInput(event) {
+  const target = event.target;
+  setTimeout(() => { adjustItemHeight(target); }, 0);
+}
+
+function handleKeyDown(event) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    event.target.blur();
+  }
+}
 
 const isDragging = ref(false);
 const draggedIndex = ref(null);
@@ -46,33 +130,35 @@ const dragOverIndex = ref(null);
 const draggedItemClone = ref(null);
 const cloneStyle = ref({});
 
+// ✨ BUG FIX: Corrected mouse down handling
 function handleMouseDown(event, index) {
-  if (event.target.closest('.rationale-actions') || event.target.isContentEditable) {
+  // CRITICAL FIX: Stop event propagation immediately.
+  // This prevents the event from bubbling up to the Vue Flow node wrapper,
+  // which would otherwise incorrectly initiate a node drag,
+  // blocking both text editing and item dragging.
+  event.stopPropagation();
+
+  // Guard clause: If the click is on a button or the editable text area,
+  // do nothing further. This allows default browser actions like
+  // focusing the text editor or clicking a button.
+  if (event.target.closest('.rationale-actions') || event.target.closest('.delete-btn') || event.target.closest('[contenteditable="true"]')) {
     return;
   }
-  event.preventDefault(); 
-  event.stopPropagation();
+  
+  // If the code reaches here, it means the user is trying to drag a rationale item.
+  // Prevent default browser actions like text selection during the drag.
+  event.preventDefault();
+  
   isDragging.value = true;
   draggedIndex.value = index;
   const itemElement = event.currentTarget;
   const rect = itemElement.getBoundingClientRect();
-  draggedItemClone.value = {
-    text: rationales.value[index],
-    width: rect.width,
-    height: rect.height,
-  };
-  cloneStyle.value = {
-    position: 'fixed',
-    top: `${rect.top}px`,
-    left: `${rect.left}px`,
-    width: `${rect.width}px`,
-    height: `${rect.height}px`,
-    pointerEvents: 'none',
-    zIndex: 9999,
-  };
+  draggedItemClone.value = { text: rationales.value[index], width: rect.width, height: rect.height };
+  cloneStyle.value = { position: 'fixed', top: `${rect.top}px`, left: `${rect.left}px`, width: `${rect.width}px`, height: `${rect.height}px`, pointerEvents: 'none', zIndex: 9999 };
   window.addEventListener('mousemove', handleMouseMove);
   window.addEventListener('mouseup', handleMouseUp);
 }
+
 
 function handleMouseMove(event) {
   if (!isDragging.value) return;
@@ -98,7 +184,7 @@ function handleMouseUp() {
   if (dragOverIndex.value !== null && dragOverIndex.value !== draggedIndex.value) {
     const itemToMove = rationales.value.splice(draggedIndex.value, 1)[0];
     rationales.value.splice(dragOverIndex.value, 0, itemToMove);
-    emit('update:rationales', { nodeId: props.id, newRationales: rationales.value });
+    emitDataUpdate();
   }
   isDragging.value = false;
   draggedIndex.value = null;
@@ -114,21 +200,18 @@ function handleCreateNode(text) {
 
 function deleteRationale(index) {
   rationales.value.splice(index, 1);
-  emit('update:rationales', { nodeId: props.id, newRationales: rationales.value });
+  emitDataUpdate();
 }
 
-
 async function addNewRationale() {
-  const newRationaleText = '';
-  rationales.value.push(newRationaleText); // 
-  emit('update:rationales', { nodeId: props.id, newRationales: rationales.value });
-  
-
+  rationales.value.push('');
+  emitDataUpdate();
   await nextTick();
   const listItems = listContainerRef.value.querySelectorAll('.rationale-text');
-  const newItem = listItems[listItems.length - 1]; // 获取最后一个条目
+  const newItem = listItems[listItems.length - 1];
   if (newItem) {
     newItem.focus();
+    adjustItemHeight(newItem);
   }
 }
 
@@ -136,7 +219,7 @@ function updateRationaleText(event, index) {
   const newText = event.target.innerText;
   if (rationales.value[index] !== newText) {
     rationales.value[index] = newText;
-    emit('update:rationales', { nodeId: props.id, newRationales: rationales.value });
+    emitDataUpdate();
   }
 }
 
@@ -149,13 +232,31 @@ const nodeSelectionStyle = computed(() => {
 
 <template>
   <div class="text-node-container" :style="nodeSelectionStyle">
-    <NodeResizer :min-width="200" :min-height="150" :visible="selected" />
+    <NodeResizer :min-width="200" :min-height="200" :visible="selected" />
     <Handle id="top" :position="Position.Top" />
     <Handle id="bottom" :position="Position.Bottom" />
     <Handle id="left" :position="Position.Left" />
     <Handle id="right" :position="Position.Right" />
 
-    <div class="rationales-list" ref="listContainerRef">
+    <div class="node-header">
+      <div class="title-container" v-if="!isEditingTitle">
+        <strong @click.stop="startEditTitle" title="Click to edit title">
+          {{ title }}
+        </strong>
+      </div>
+      <input
+        v-else
+        ref="titleInput"
+        v-model="title"
+        @blur="saveTitle"
+        @keydown.enter.prevent="saveTitle"
+        @click.stop
+        class="title-input"
+        type="text"
+      />
+    </div>
+
+    <div class="rationales-list" ref="listContainerRef" @wheel.stop>
       <div
         v-for="(rationale, index) in rationales"
         :key="index"
@@ -164,21 +265,18 @@ const nodeSelectionStyle = computed(() => {
           'is-dragging-placeholder': isDragging && draggedIndex === index,
           'is-drop-target': isDragging && dragOverIndex === index
         }"
-        @mousedown.stop
         @mousedown="handleMouseDown($event, index)"
       >
         <div
           class="rationale-text"
           contenteditable="true"
           @blur="updateRationaleText($event, index)"
-          @keydown.enter.prevent="($event.target).blur()"
+          @input="handleTextInput($event)"
+          @keydown="handleKeyDown($event)"
           v-text="rationale"
         ></div>
-
+        <button class="action-btn delete-btn" @click.stop="deleteRationale(index)" title="Delete this item">-</button>
         <div class="rationale-actions">
-           <button class="action-btn delete-btn" @click.stop="deleteRationale(index)" title="Delete this item">
-            -
-          </button>
           <button class="create-node-btn" @click.stop="handleCreateNode(rationale)" title="Create node from this text">
             + Create Node
           </button>
@@ -186,12 +284,21 @@ const nodeSelectionStyle = computed(() => {
       </div>
     </div>
     
-    <div class="add-rationale-footer">
+    <div class="node-footer">
       <button @click="addNewRationale" class="add-new-btn" title="Add a new item to the end">
         + 
       </button>
+      
     </div>
-
+    <div class="node-footer2">
+      
+      <button @click="handleSendData" class="send-data-btn" :disabled="isSending" title="Send data to backend">
+        <div v-if="isSending" class="spinner"></div>
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
+                <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+          </svg>
+      </button>
+    </div>
   </div>
 
   <Teleport to="body">
@@ -202,11 +309,12 @@ const nodeSelectionStyle = computed(() => {
 </template>
 
 <style scoped>
+/* Base Styles (unchanged) */
 .text-node-container {
   width: 100%;
   height: 100%;
   background-color: #fefce8;
-  border: 1px solid #eab308;
+  border: 1px solid #b7c0ce;
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -214,201 +322,135 @@ const nodeSelectionStyle = computed(() => {
   font-family: 'JetBrains Mono', sans-serif;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
-
-.rationales-list {
-  flex-grow: 1;
-  padding: 8px;
-  overflow-y: auto; 
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.rationales-list::-webkit-scrollbar {
-  width: 8px;
-}
-.rationales-list::-webkit-scrollbar-track {
-  background: #fef9c3;
-  border-radius: 4px;
-}
-.rationales-list::-webkit-scrollbar-thumb {
+.node-header {
+  padding: 8px 12px;
   background-color: #fde047;
-  border-radius: 4px;
-  border: 2px solid #fef9c3;
+  border-bottom: 1px solid #facc15;
+  flex-shrink: 0;
 }
-.rationales-list::-webkit-scrollbar-thumb:hover {
-  background-color: #facc15;
+.node-header strong {
+  font-weight: 600; font-size: 14px; color: #4b5563; cursor: text;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
 }
+.title-input {
+  width: 100%; background: transparent; border: transparent; border-radius: 4px;
+  padding: 2px 4px; color: #334155; font-family: 'JetBrains Mono', sans-serif;
+  font-size: 14px; font-weight: 600; outline: none; box-sizing: border-box;
+}
+.rationales-list {
+  flex-grow: 1; padding: 8px; overflow-y: auto; 
+  display: flex; flex-direction: column; gap: 8px;
+}
+.rationales-list::-webkit-scrollbar { width: 8px; }
+.rationales-list::-webkit-scrollbar-track { background: #fef9c3; border-radius: 4px; }
+.rationales-list::-webkit-scrollbar-thumb { background-color: #fde047; border-radius: 4px; border: 2px solid #fef9c3; }
+.rationales-list::-webkit-scrollbar-thumb:hover { background-color: #facc15; }
 
 .rationale-item {
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px;
-  font-size: 13px;
-  color: #334155;
-  cursor: grab;
-  position: relative;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  overflow: hidden;
-  padding-bottom: 40px; 
+  background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 12px; font-size: 13px; color: #334155; cursor: grab;
+  position: relative; min-height: 95px; 
+  transition: height 0.2s ease-in-out, border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden; display: flex;
 }
-.rationale-item:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-}
-
+.rationale-item:hover { border-color: #3b82f6; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
 .rationale-text {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  padding: 4px;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-  cursor: text;
+  flex-grow: 1; margin: 0; white-space: pre-wrap; word-break: break-word;
+  padding: 4px; border-radius: 4px; transition: background-color 0.2s;
+  cursor: text; overflow-y: hidden;
 }
-.rationale-text:focus {
-  outline: none;
-  background-color: #eff6ff;
-  box-shadow: 0 0 0 2px #3b82f6;
-}
+.rationale-text:focus { outline: none; background-color: #eff6ff; box-shadow:transparent; }
 
-
-.rationale-actions {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  opacity: 0; 
-  transition: opacity 0.2s ease-in-out;
-}
-
-/* ✨ 已修改: 悬停时显示按钮 */
-.rationale-item:hover .rationale-actions {
-  opacity: 1;
-}
+.rationale-actions { position: absolute; bottom: 8px; right: 8px; opacity: 0; transition: opacity 0.2s ease-in-out; }
+.delete-btn { position: absolute; top: 8px; right: 8px; opacity: 0; }
+.rationale-item:hover .rationale-actions,
+.rationale-item:hover .delete-btn { opacity: 1; }
 
 .action-btn {
-  background-color: #e2e8f0;
-  color: #475569;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
+  background-color: #e2e8f0; color: #475569; border: 1px solid #cbd5e1;
+  border-radius: 6px; padding: 4px; font-size: 12px; cursor: pointer;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s ease;
 }
-.action-btn:hover {
-  background-color: #cbd5e1;
-  border-color: #94a3b8;
-}
-.delete-btn:hover {
-  background-color: #fee2e2;
-  color: #ef4444;
-  border-color: #fca5a5;
-}
+.action-btn:hover { background-color: #cbd5e1; border-color: #94a3b8; }
+.delete-btn:hover { background-color: #fee2e2; color: #ef4444; border-color: #fca5a5; }
 
 .create-node-btn {
-  position: static;
-  opacity: 1;
-  transform: none;
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 4px 8px;
-  font-size: 10px;
-  font-weight: 500;
-  cursor: pointer;
+  background-color: #3b82f6; color: white; border: none; border-radius: 6px;
+  padding: 4px 8px; font-size: 10px; font-weight: 500; cursor: pointer;
   transition: background-color 0.2s ease;
 }
-.create-node-btn:hover {
-  background-color: #2563eb;
-}
+.create-node-btn:hover { background-color: #2563eb; }
 
-/* ✨ 已修改: 为新的底部容器和按钮添加样式 */
-.add-rationale-footer {
-  padding: 8px;
-  border-top: 1px solid #fde047; /* 分隔线 */
-  background-color: #fefce8;
+.node-footer {
+  padding: 6px;  background-color: #fefce8;
+  flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
 }
-
+.node-footer2 {
+  padding: 6px; background-color: #fefce8;
+  flex-shrink: 0; display: flex; justify-content: flex-end; align-items: center;
+}
 .add-new-btn {
-  width: 100%;
-  background-color: #fffbeb;
-  color: #ca8a04;
-  border: 1px dashed #facc15;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
+  background-color: #fffbeb; color: #c3c4c6; border: 2px solid #c3c4c6;
+  border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s ease;
+}
+.add-new-btn:hover {
+  background-color: #fef9c3; border-color: #eab308;
+  border-style: solid; color: #a16207;
+}
+
+.send-data-btn {
+  background: transparent;
+  color: #495057; /* Icon color */
+  border: 1.5px solid #c3c4c6; /* Use a slightly thicker border */
+  border-radius: 50%; /* Perfect circle */
+  width: 36px; /* Fixed width */
+  height: 36px; /* Fixed height */
+  padding: 0; /* Remove padding to center icon */
   cursor: pointer;
-  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  transition: all 0.2s ease-in-out; /* Transition all properties */
 }
-.add-new-btn:hover {
-  background-color: #fef9c3;
-  border-color: #eab308;
-  border-style: solid;
-  color: #a16207;
+.send-data-btn:hover:not(:disabled) {
+  background-color: #495057; /* Fill with border color on hover */
+  border-color: #495057;
+  color: white; /* Icon becomes white */
+  transform: scale(1.1); /* A nice pop effect */
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
-
-
-.rationale-item-clone {
-  cursor: grabbing;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-  transform: scale(1.05);
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px;
-  font-size: 13px;
-  font-family: 'JetBrains Mono', sans-serif;
-  color: #334155;
-}
-.is-dragging-placeholder {
-  background-color: #f0f9ff;
-  border-color: #bae6fd;
-  border-style: dashed;
-}
-.is-dragging-placeholder > * {
-  opacity: 0;
-}
-.is-drop-target {
-  background-color: #dbeafe;
-  border-color: #3b82f6;
+.send-data-btn:disabled {
+  background-color: #e9ecef;
+  border-color: #ced4da;
+  color: #adb5bd;
+  cursor: not-allowed;
 }
 
-:deep(.resizer-handle) {
-  width: 12px;
-  height: 12px;
-  background-color: #2563EB;
-  border-radius: 2px;
-  border: 1px solid white;
+.spinner {
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  border-top-color: #333;
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
 }
-:deep(.resizer-line) {
-  border-color: #2563EB;
-  border-width: 3px;
+/* Spinner inside disabled button */
+.send-data-btn:disabled .spinner {
+    border-top-color: #adb5bd;
 }
-.text-node-container .vue-flow__handle-top,
-.text-node-container .vue-flow__handle-right,
-.text-node-container .vue-flow__handle-left {
-  opacity: 0;
-}
-:deep(.vue-flow__handle) {
-  width: 10px;
-  height: 10px;
-  background-color: #9e9e9e;
-  border: 1px solid #f0f0f0;
-}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Drag & Drop Styles (unchanged) */
+.rationale-item-clone { cursor: grabbing; box-shadow: 0 10px 25px rgba(0,0,0,0.2); transform: scale(1.05); background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 13px; font-family: 'JetBrains Mono', sans-serif; color: #334155; }
+.is-dragging-placeholder { background-color: #f0f9ff; border-color: #bae6fd; border-style: dashed; }
+.is-dragging-placeholder > * { opacity: 0; }
+.is-drop-target { background-color: #dbeafe; border-color: #3b82f6; }
+
+/* Handle Styles (unchanged) */
+:deep(.resizer-handle) { width: 12px; height: 12px; background-color: transparent; border-radius: 2px; border: transparent; }
+:deep(.resizer-line) { border-color: transparent; border-width: 3px; }
+.text-node-container .vue-flow__handle-top, .text-node-container .vue-flow__handle-right, .text-node-container .vue-flow__handle-left { opacity: 0; }
+:deep(.vue-flow__handle) { width: 10px; height: 10px; background-color: transparent; border: transparent; }
 </style>

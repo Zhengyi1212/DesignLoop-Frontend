@@ -41,7 +41,7 @@ const isFetchingPipeline = ref(false);
 const runningNodeId = ref(null);
 const vueFlowRef = ref(null);
 const snapshots = ref([]);
-const newNodeColor = ref('#34495e');
+const newNodeColor = ref('#FBF29B');
 const isDetailModalVisible = ref(false);
 const selectedSnapshotForDetail = ref(null);
 
@@ -140,7 +140,7 @@ async function handleRatingSubmit(payload) {
   const runNodeContent = payload.context.content;
   const ratings = payload.ratings
   try {
-    const response = await fetch("/api/submit-rating", {
+    const response = await fetch("http://localhost:7001/submit-rating", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -411,6 +411,7 @@ function handleOpenSubCanvas(nodeId) {
         initialNodes: JSON.parse(JSON.stringify(parentNode.data.subGraph?.nodes || [])),
         initialEdges: JSON.parse(JSON.stringify(parentNode.data.subGraph?.edges || [])),
         initialChainList: parentNode.data.chain,
+        isSaved : parentNode.data.isSaved
       };
 }
 
@@ -420,7 +421,7 @@ function handleCloseSubCanvas(payload) {
 
   const parentNodeId = activeSubCanvasData.value.id;
   const parentNode = findNode(parentNodeId);
-
+  
   if (parentNode && parentNode.data.appliedSnapshotId && payload) {
     const linkedSnapshotId = parentNode.data.appliedSnapshotId;
 
@@ -432,7 +433,7 @@ function handleCloseSubCanvas(payload) {
         edges: JSON.parse(JSON.stringify(payload.edges)),
       };
       
-    
+      parentNode.data.isSaved = payload.isSaved;
       snapshotToUpdate.data.instruction = parentNode.data.instruction;
       snapshotToUpdate.data.goal = parentNode.data.goal;
       snapshotToUpdate.goal = parentNode.data.goal;
@@ -450,6 +451,7 @@ function handleSubCanvasUpdate(event) {
             nodes: JSON.parse(JSON.stringify(event.nodes)), 
             edges: JSON.parse(JSON.stringify(event.edges)), 
         }; 
+        parentNode.data.isSaved = event.isSaved;
     }
 }
 
@@ -458,69 +460,122 @@ function handleSubCanvasDataUpdate(event) {
     if (parentNode) {
         parentNode.data.instruction = event.instruction;
         parentNode.data.goal = event.goal;
-        parentNode.data.chain = event.chain
+        parentNode.data.chain = event.chain;
+        
     }
 }
 
-
-
 function handleSaveSnapshot(snapshotPayload) {
+  const parentNode = findNode(snapshotPayload.parentNodeId);
+  if (!parentNode) return;
+
+  // 核心修改: 确保快照数据包含父节点的内容
+  // Core change: Ensure snapshot data includes the parent node's content.
+  const fullSnapshotData = {
+    ...snapshotPayload.data,
+    rationales: JSON.parse(JSON.stringify(parentNode.data.rationales || [])),
+    content: parentNode.data.content || '',
+  };
+
    const newSnapshot = {
-    id: `${snapshotIdCounter}`, // 这个 id 
+    id: `${snapshotIdCounter++}`,
     parentNodeId: snapshotPayload.parentNodeId,
     parentNodeTitle: snapshotPayload.parentNodeTitle,
     goal: snapshotPayload.data.goal,
     color: getNextSnapshotColor(),
-    data: snapshotPayload.data
+    data: fullSnapshotData // 使用我们增强后的数据
   };
 
 
   snapshots.value.push(newSnapshot);
 
 
-  const parentNode = findNode(snapshotPayload.parentNodeId);
-  if (parentNode) {
-   
-    if (!parentNode.data) parentNode.data = {};
-    parentNode.data.appliedSnapshotId = newSnapshot.id; //
-  }
+  if (!parentNode.data) parentNode.data = {};
+  parentNode.data.appliedSnapshotId = newSnapshot.id;
 }
 
+// ✨ 修改: 优化 handleApplySnapshot 逻辑
 function handleApplySnapshot({ nodeId, snapshotData }) {
   const targetNode = findNode(nodeId);
   if (!targetNode) return;
+
+  // --- 新增逻辑: 删除旧的快照 ---
+  // 1. 获取当前节点关联的旧快照ID
+  const oldSnapshotId = targetNode.data.appliedSnapshotId;
+
+  // 2. 如果存在旧快照ID，则从主快照列表中移除
+  if (oldSnapshotId) {
+    const oldSnapshotIndex = snapshots.value.findIndex(s => s.id === oldSnapshotId);
+    if (oldSnapshotIndex !== -1) {
+      snapshots.value.splice(oldSnapshotIndex, 1);
+    }
+  }
+  // --- 新增逻辑结束 ---
+
   const dataToApply = snapshotData.data;
-  const id = snapshotIdCounter++
-  console.log(id+1)
-  targetNode.data.appliedSnapshotId = id+1
+  const newSnapshotId = `${snapshotIdCounter++}`;
+
+  // Update sub-canvas related data
   targetNode.data.instruction = dataToApply.instruction;
   targetNode.data.goal = dataToApply.goal;
-  targetNode.data.subGraph = JSON.parse(JSON.stringify(dataToApply.subGraph));
+  
+  // 核心修改: 在应用快照时过滤掉 TextNode
+  // Core change: Filter out TextNodes when applying a snapshot.
+  if (dataToApply.subGraph && dataToApply.subGraph.nodes) {
+    const nodesToApply = dataToApply.subGraph.nodes.filter(n => n.type !== 'text');
+    const nodeIdsToKeep = new Set(nodesToApply.map(n => n.id));
+    const edgesToApply = (dataToApply.subGraph.edges || []).filter(e => nodeIdsToKeep.has(e.source) && nodeIdsToKeep.has(e.target));
+    
+    targetNode.data.subGraph = {
+        nodes: JSON.parse(JSON.stringify(nodesToApply)),
+        edges: JSON.parse(JSON.stringify(edgesToApply)),
+    };
+  } else {
+    targetNode.data.subGraph = { nodes: [], edges: [] };
+  }
+  
   targetNode.data.chain = dataToApply.chain;
 
-  // Add a visual indicator
+  // 同时更新 rationales 和 content 以确保兼容性
+  // Update both rationales and content at the same time to ensure compatibility.
+  if (dataToApply.rationales && dataToApply.rationales.length > 0) {
+    targetNode.data.rationales = JSON.parse(JSON.stringify(dataToApply.rationales));
+    targetNode.data.content = dataToApply.rationales.join('\n');
+  } else if (dataToApply.content) { // Fallback for older snapshots
+    targetNode.data.content = dataToApply.content;
+    targetNode.data.rationales = [dataToApply.content];
+  }
+
+  // Update visual indicator
   targetNode.data.hasSnapshot = true;
+  targetNode.data.appliedSnapshotId = newSnapshotId;
+  
+  // Create a full, deep copy of the snapshot to add to the panel
   const newSnapshotCopy = {
-    id: `${snapshotIdCounter}`,
+    id: newSnapshotId,
     color: snapshotData.color || getNextSnapshotColor(),
     parentNodeId: targetNode.id,
     parentNodeTitle: targetNode.data.title, 
-    // 
-    goal: snapshotData.goal,
-    data: JSON.parse(JSON.stringify(snapshotData.data))
+    goal: dataToApply.goal,
+    data: JSON.parse(JSON.stringify(dataToApply))
   };
-  targetNode.data.appliedSnapshotColor = newSnapshotCopy.color;
-  // Add the new, copied snapshot to the panel
-  snapshots.value.push(newSnapshotCopy);
-
   
+  targetNode.data.appliedSnapshotColor = newSnapshotCopy.color;
+  
+  snapshots.value.push(newSnapshotCopy);
 }
 
+
+
+
+
+// ✨ 修改: 修正节点更新逻辑
 function handleNodeUpdate(event) {
   const node = findNode(event.id);
   if (node) {
-    node.data.title = event.data.title;
-    node.data.content = event.data.content;
+    // 使用对象扩展运算符(...)来合并数据，确保所有属性(包括 rationales 和 content)都被正确更新
+    // Use the spread operator (...) to merge data, ensuring all properties (including rationales and content) are updated correctly.
+    node.data = { ...node.data, ...event.data };
   }
 }
 
@@ -532,6 +587,8 @@ async function handleNodeRun(nodeId) {
     runningNodeId.value = nodeId;
     node.data.content = 'Running...';
     const successors = findPredecessors(nodeId, nodes.value, edges.value);
+    console.log("SU: ",successors)
+    console.log("title:",node.data.title)
     try {
         const response = await fetch("/api/brainstorm", {
             method: "POST",
@@ -653,21 +710,7 @@ async function handleFetchPipeline(payload) {
     if (!response.ok) throw new Error(`Server responded with ${response.status}`);
     const data = await response.json();
     instructionPanels.value[3].content = Array.isArray(data.pipeline) ? data.pipeline.join('\n') : String(data.pipeline);
-  
-    // 将按钮的屏幕坐标转换为主画布坐标
-    //const buttonRect = payload.event.target.getBoundingClientRect();
-   // const position = project({ x: buttonRect.right + 202, y: buttonRect.top + 362});
 
-    // 添加反馈节点
-    //addRatingNode({
-      //  position,
-       // type: 'fetch-pipeline',
-       // context: {
-            // 可选：添加一些上下文信息
-         //   design_goal: instructionPanels.value[2].content
-        //}
-   // });
-  
   } catch (error) {
     console.error("Error during pipeline request:", error);
   } finally {
@@ -675,45 +718,69 @@ async function handleFetchPipeline(payload) {
   }
 }
 
-
-function node_chain_autogene(nodeData) {
+// ✨ 修改: 优化 node_chain_autogene 逻辑
+async function node_chain_autogene(nodeData) {
   pipelineCounter.value++;
-  console.log(pipelineCounter)
   if (!Array.isArray(nodeData) || nodeData.length === 0) return;
-  const newNodes = []; const newEdges = [];
-  const startX = 100; const startY = 200 + pipelineOffset *pipelineCounter; const gapX = 250;
+  const newNodes = []; 
+  const newEdges = [];
+  const startX = 100; 
+  const startY = 200 + pipelineOffset * pipelineCounter.value; 
+  const gapX = 250;
+  
   nodeData.forEach((data, index) => {
+    const pipelineContent = data.pipeline_content || ''; // 将内容存为变量
     const newNode = {
-      id: `chain-node-${nodeIdCounter++}`, type: 'custom',
+      id: `chain-node-${nodeIdCounter++}`, 
+      type: 'custom',
       position: { x: startX + index * gapX, y: startY },
-      style: { width: '200px', height: '150px' },
+      style: { width: '200px', height: '200px' }, 
       data: {
-        title: data.pipeline_title || 'Untitled Node', content: data.pipeline_content || '',
+        title: data.pipeline_title || 'Untitled Node',
+        // 核心修改: 同时创建 rationales 和 content 保证数据一致性
+        // Core change: Create rationales and content at the same time to ensure data consistency.
+        rationales: [ pipelineContent ], 
+        content: pipelineContent,
         color: newNodeColor.value,
-        connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] },
+        connections: { in: [], out: [] }, 
+        subGraph: { nodes: [], edges: [] },
       },
     };
     newNodes.push(newNode);
   });
 
   for (let i = 1; i < newNodes.length; i++) {
-    const sourceNode = newNodes[i - 1]; const targetNode = newNodes[i];
+    const sourceNode = newNodes[i - 1]; 
+    const targetNode = newNodes[i];
     const newEdge = {
-      id: `chain-edge-${sourceNode.id}-to-${targetNode.id}`, source: sourceNode.id, target: targetNode.id,
-      sourceHandle: 'right', targetHandle: 'left', type: 'custom', selectable: true, interactionWidth: 30,
+      id: `chain-edge-${sourceNode.id}-to-${targetNode.id}`, 
+      source: sourceNode.id, 
+      target: targetNode.id,
+      sourceHandle: 'right', 
+      targetHandle: 'left', 
+      type: 'custom', 
+      selectable: true, 
+      interactionWidth: 30,
     };
     newEdges.push(newEdge);
     sourceNode.data.connections.out.push({ edgeId: newEdge.id, targetId: targetNode.id, sourceHandle: 'right' });
     targetNode.data.connections.in.push({ edgeId: newEdge.id, sourceId: sourceNode.id, targetHandle: 'left' });
   }
   
-  addNodes(newNodes); addEdges(newEdges);
+  addNodes(newNodes); 
+  
+  // 使用 nextTick 确保节点渲染完毕后再添加边，防止坐标错误
+  // Use nextTick to ensure that nodes are rendered before adding edges to prevent coordinate errors.
+  await nextTick();
+  
+  addEdges(newEdges);
 }
+
 
 async function handleGeneration(payload) {
   isGenerating.value = true;
   try {
-    const response = await fetch("/api/generate-node-chain", {
+    const response = await fetch("http://localhost:7001/generate-node-chain", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         pipeline: instructionPanels.value[3].content,
         design_background: instructionPanels.value[1].content,
@@ -723,14 +790,6 @@ async function handleGeneration(payload) {
     if (!response.ok) throw new Error(`Server responded with ${response.status}`);
     const data = await response.json();
     if (data) node_chain_autogene(data);
-
-    //const buttonRect = payload.event.target.getBoundingClientRect();
-    //const position = project({ x: buttonRect.right + 202, y: buttonRect.top + 465});
-    
-    //addRatingNode({
-      //position,
-      //type: 'node-chain-generation'
-    //});
 
   } catch (error) {
     console.error("Error during node chain request:", error);
@@ -954,7 +1013,7 @@ body, html {
 .main-toolbar-wrapper {
   position: absolute;
   bottom: 0px;
-  left: 50%;
+  left: 58%;
   transform: translateX(-50%);
   z-index: 10;
 }

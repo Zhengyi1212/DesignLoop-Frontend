@@ -64,8 +64,8 @@ function handleAddTextClick() {
   >
     <NodeResizer
       v-if="id !== 'ghost-node'"
-      :min-width="120"
-      :min-height="80"
+      :min-width="100"
+      :min-height="60"
       :visible="selected"
       line-class-name="resizer-line"
       handle-class-name="resizer-handle"
@@ -103,7 +103,9 @@ function handleAddTextClick() {
           title="Show Rationale"
         >
           <div v-if="isGeneratingRationale" class="spinner"></div>
-          <span v-else>Run</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 16 16">
+                <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+          </svg>
         </button>
       </div>
 
@@ -133,7 +135,7 @@ function handleAddTextClick() {
     border-color: #ddd;
 }
 .vue-flow__node-selected .chain-node {
-  border-color: #6366F1;
+  border-color: transparent;
 }
 .node-content-wrapper {
     display: flex;
@@ -155,9 +157,6 @@ function handleAddTextClick() {
   cursor: text;
 }
 
-/* The special styling for .is-text-node is no longer needed for overflow */
-/* and has been removed to simplify the code and fix the bug. */
-
 .content-display {
   margin: 0;
   white-space: pre-wrap;
@@ -177,7 +176,7 @@ function handleAddTextClick() {
   color: #2c3e50;
   resize: none;
   box-sizing: border-box;
-  outline: 2px solid #6366F1;
+  outline: transparent;
 }
 .chain-node.is-editing {
   cursor: default;
@@ -225,8 +224,8 @@ function handleAddTextClick() {
   font-size: 6px;
   font-family: 'JetBrains Mono', sans-serif;
   font-weight: 500;
-  width: 28px; /* Ensure button width is consistent */
-  height: 18px;
+  width: 32px; /* Ensure button width is consistent */
+  height: 20px;
   border: none;
   cursor: pointer;
   display: flex;
@@ -267,19 +266,19 @@ function handleAddTextClick() {
 :deep(.resizer-handle) {
   width: 12px;
   height: 12px;
-  background-color: #6366F1;
+  background-color: transparent;
   border-radius: 2px;
-  border: 1px solid white;
+  border: transparent;
 }
 :deep(.resizer-line) {
-  border-color: #6366F1;
+  border-color: transparent;
   border-width: 3px;
 }
 :deep(.vue-flow__handle) {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   background-color: #9e9e9e;
-  border: 1px solid #f0f0f0;
+  border: 2px solid #f0f0f0;
 }
 .chain-node .vue-flow__handle-top {
   opacity: 0;  

@@ -53,10 +53,17 @@ defineProps({
 
 /* 调整 resize 手柄样式 */
 :deep(.vue-flow__node-resizer-handle) {
-  background-color: #007bff;
-  border: 1px solid white;
+  background-color: transparent;
+  border: transparent;
   width: 10px;
   height: 10px;
   border-radius: 2px;
+}
+:deep(.resizer-handle) {
+  background-color: transparent;
+  border: 2px solid transparent;
+}
+:deep(.resizer-line) {
+  border-color: transparent;
 }
 </style>

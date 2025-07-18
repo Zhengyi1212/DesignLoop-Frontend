@@ -18,7 +18,7 @@ const emit = defineEmits(['close', 'submit']);
 const ratings = ref({
   novelty: 3, 
   relevance: 3, // 相关性
-  clarity: 3,   // 清晰度
+  //clarity: 3,   // 清晰度
   value: 3,
   suprise: 3,
 });
@@ -28,7 +28,7 @@ const ratings = ref({
  * @param {number} score - 当前分数
  */
 const getFilledWidth = (score) => {
-  // 我们有10个点，9个间隔。宽度从0%到100%。
+  // 我们有5个点，4个间隔。宽度从0%到100%。
   return computed(() => ((score - 1) / 4) * 100 + '%');
 };
 
@@ -42,8 +42,8 @@ const getThumbPosition = (score) => {
 
 /**
  * 当用户点击圆点时，设置评分
- * @param {string} category - 评分类别 (e.g., 'accuracy')
- * @param {number} score - 分数 (1-10)
+ * @param {string} category - 评分类别 (e.g., 'novelty')
+ * @param {number} score - 分数 (1-5)
  */
 function setRating(category, score) {
   ratings.value[category] = score;
@@ -63,11 +63,25 @@ function updateRatingFromClick(category, event) {
   // 确保百分比在 0 和 1 之间
   const percentage = Math.max(0, Math.min(1, clickX / barWidth));
   
-  // 将百分比映射到 1-10 的分数
+  // 将百分比映射到 1-5 的分数
   const score = Math.round(percentage * 4) + 1;
   
   setRating(category, score);
 }
+
+/*
+<div class="rating-item">
+        <label>Clarity: <span class="rating-value">{{ ratings.clarity }}</span></label>
+        <div class="rating-bar-container" @click="updateRatingFromClick('clarity', $event)">
+          <div class="rating-bar-track"></div>
+          <div class="rating-bar-ticks">
+            <span v-for="n in 5" :key="n" class="tick"></span>
+          </div>
+          <div class="rating-bar-filled" :style="{ width: getFilledWidth(ratings.clarity).value }"></div>
+          <div class="rating-thumb" :style="{ left: getThumbPosition(ratings.clarity).value }"></div>
+        </div>
+      </div>
+*/
 
 
 // 提交和关闭的逻辑保持不变
@@ -87,14 +101,13 @@ function handleClose() {
 <template>
   <div class="rating-node-wrapper">
     
-
     <div class="node-header">
       <span class="header-icon">📝</span>
       <span class="header-title">Feedback</span>
+      <button @click="handleClose" class="close-button">&times;</button>
     </div>
 
     <div class="node-content">
-      <!-- Accuracy Rating -->
       <div class="rating-item">
         <label>Novelty: <span class="rating-value">{{ ratings.novelty }}</span></label>
         <div class="rating-bar-container" @click="updateRatingFromClick('novelty', $event)">
@@ -107,7 +120,6 @@ function handleClose() {
         </div>
       </div>
 
-      <!-- Relevance Rating -->
       <div class="rating-item">
         <label>Relevance: <span class="rating-value">{{ ratings.relevance }}</span></label>
         <div class="rating-bar-container" @click="updateRatingFromClick('relevance', $event)">
@@ -120,18 +132,7 @@ function handleClose() {
         </div>
       </div>
 
-      <!-- Clarity Rating -->
-      <div class="rating-item">
-        <label>Clarity: <span class="rating-value">{{ ratings.clarity }}</span></label>
-        <div class="rating-bar-container" @click="updateRatingFromClick('clarity', $event)">
-          <div class="rating-bar-track"></div>
-          <div class="rating-bar-ticks">
-            <span v-for="n in 5" :key="n" class="tick"></span>
-          </div>
-          <div class="rating-bar-filled" :style="{ width: getFilledWidth(ratings.clarity).value }"></div>
-          <div class="rating-thumb" :style="{ left: getThumbPosition(ratings.clarity).value }"></div>
-        </div>
-      </div>
+  
       <div class="rating-item">
         <label>Value <span class="rating-value">{{ ratings.value }}</span></label>
         <div class="rating-bar-container" @click="updateRatingFromClick('value', $event)">
@@ -196,25 +197,27 @@ function handleClose() {
   color: #343a40;
 }
 
+/* Style for the new close button */
 .close-button {
+  margin-left: auto; /* Pushes the button to the right */
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background-color: rgba(0, 0, 0, 0.6);
-  color: white;
+  background-color: #f1f3f5;
+  color: #868e96;
   border: none;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
 .close-button:hover {
   background-color: #e74c3c;
+  color: white;
   transform: scale(1.1);
 }
 

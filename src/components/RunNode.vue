@@ -144,10 +144,9 @@ function onShowRating() {
     <div class="node-footer">
         <!-- 新增的评价按钮 -->
         <button v-if="!isRunning && !isEditingContent" class="rating-btn" @click.stop="onShowRating" title="Rate this result">
-            <img src="@/assets/icon.png" alt="Click to rate the response" style="width: 28px; height: 28px; vertical-align: middle;">
-            
+            Click
           </button>
-          
+          <p class="text">to rate response</p>
         <!-- 原有的运行按钮/加载动画 -->
         <button v-if="!isRunning && !isEditingContent" class="run-btn" @click.stop="onRun" title="Run this node">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -166,7 +165,7 @@ function onShowRating() {
 /* 4. 修改/增加样式 */
 .run-node {
   background-color: #ffffff;
-  border: 1px solid #f3d179;
+  border:1px solid #b7c0ce;
   border-radius: 8px;
   font-family: 'JetBrains Mono', sans-serif;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -223,9 +222,11 @@ function onShowRating() {
   padding: 0 5px; line-height: 1; opacity: 0.8; transition: opacity 0.2s;
   color: inherit;
 }
+
 .delete-btn:hover {
   opacity: 1;
 }
+
 .node-footer {
     padding: 0 12px 12px;
     display: flex;
@@ -233,31 +234,42 @@ function onShowRating() {
     justify-content: space-between; 
     align-items: center;
     height: 40px;
+    font-size: 6px;
 }
 
 .rating-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 39px;
-    height: 34px;
-    padding: 0;
-    border: 1px solid #bdc3c7;
-    background-color: #ecf0f1;
-    color: #7f8c8d;
-    border-radius: 10%; /* 圆形 */
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;  /* 调整了尺寸以获得更好的视觉效果 */
+            height: 20px;
+            padding: 0;
+            border: transparent; /* 添加了匹配的深红色边框 */
+            
+            /* --- 修改的核心部分 --- */
+            background-color:#F6E3E3 ; /* 深红色背景 (Dark Red) */
+            color: #F35B5B ;           /* 浅红色/粉色文字 (Light Red/Pink) */
+            /* --- ---------------- --- */
 
-.rating-btn:hover {
-    background-color: #bdc3c7;
-    color: white;
-    border-color: #95a5a6;
-}
+            border-radius: 2px; /* 调整了圆角使其更柔和 */
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            font-size: 12px; /* 调整了字体大小以适应按钮 */
+            font-weight: bold;
+        }
 
+        /* 鼠标悬停时的效果 */
+        .rating-btn:hover {
+            background-color: #922B21; /* 悬停时背景变得更深 */
+            color: #FFFFFF;           /* 悬停时文字变为白色，以提供更清晰的视觉反馈 */
+            transform: scale(1.05);    /* 添加轻微的放大效果 */
+        }
+.text {
+  font-size: 9px;
+  color: #878787;
+}
 .run-btn {
-    display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+    display: flex; align-items: right; gap: 0px; padding: 0px 6px;
     border: 1px solid #e67e22; background-color: #f39c12; color: white;
     border-radius: 8px; cursor: pointer; transition: all 0.2s ease;
     font-family: 'JetBrains Mono', monospace; font-size: 14px;
@@ -291,10 +303,11 @@ function onShowRating() {
 }
 
 :deep(.resizer-handle) {
-  background-color: #f1c40f;
+  background-color: transparent;
+  border:transparent;
 }
 :deep(.resizer-line) {
-  border-color: #f1c40f;
+  border-color: transparent;
 }
 :deep(.vue-flow__handle) {
   background-color: #9e9e9e;

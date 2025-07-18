@@ -31,7 +31,7 @@ const getRandomColor = () => {
         @dblclick="emit('show-details', snapshot)" 
         title="Drag to apply, Double-click for details"
         
-        :style="{ backgroundColor: getRandomColor() }"
+        :style="{ backgroundColor: white }"
       >
         <div class="snapshot-info">
           

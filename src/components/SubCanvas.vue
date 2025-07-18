@@ -28,18 +28,19 @@ const props = defineProps({
   designGoal : { type: String, default: '' },
   initialChainList: { type: Array, required: true },
   userId: { type: String, required: true },
+  isSaved: {type: Boolean, default: false}
 });
 
 const emit = defineEmits(['close', 'update:graph', 'update:data', 'save-snapshot']);
 
 const isEditModalVisible = ref(false);
 const editingNode = ref(null);
-const isFrozen = ref(false);
+//const isFrozen = ref(false);
 const nodes = ref(props.initialNodes);
 const edges = ref(props.initialEdges);
 let subNodeIdCounter = ref(props.initialNodes.length > 0 ? Math.max(...props.initialNodes.map(n => parseInt(n.id.split('-').pop()) || 0)) + 1 : 0);
 const isAddingNode = ref(false);
-const isAddingGroup = ref(false); // 状态：是否正在添加分组
+const isAddingGroup = ref(false); 
 const isShowingRunNode = ref(false);
 const vueFlowRef = ref(null);
 const chainList = ref(null || props.initialChainList)
@@ -47,10 +48,11 @@ const chainList = ref(null || props.initialChainList)
 const instruction = ref( props.parentNodeInstruction || '');
 const goal = ref(props.parentNodeGoal || '');
 const isSubCanvasRunning = ref(false);
-const isSaveButtonRunning = ref(false)
-const runningSubNodeId = ref(null);
+const isSaveButtonRunning = ref(false);
+const isSaved = ref(props.isSaved)
+
 const runBtnRef = ref(null);
-const newNodeColor = ref('#34495e');
+const newNodeColor = ref('#fffffff');
 
 const isGeneratingRationaleNodeId = ref(null);
 
@@ -120,27 +122,139 @@ function handleShowSubCanvasRating() {
     }]);
 }
 
-function handleRationalesUpdate({ nodeId, newRationales }) {
-  const node = subflow.findNode(nodeId);
+// ✨ 新增: 用于处理 TextNode 数据更新的通用函数
+function handleNodeDataUpdate({ id, data }) {
+  const node = subflow.findNode(id);
   if (node) {
-    node.data.rationales = newRationales;
+    // 使用合并的方式更新数据，以保留可能存在的其他未传回的属性
+    node.data = { ...node.data, ...data };
+    isSaved.value = false; // 将画布标记为有未保存的更改
   }
 }
 
+async function handleTextNodeSendData({ id, title, rationales, parent_content }) {
+  console.log("Received data from TextNode for regeneration:", { id, title, rationales, parent_content });
+
+  // 1. 查找需要更新的目标节点
+  const nodeToUpdate = subflow.findNode(id);
+  if (!nodeToUpdate) {
+    console.error(`Failed to find node with ID: ${id}`);
+    alert(`操作失败：未找到目标节点。`);
+    return;
+  }
+  
+  // 2. 构造发送到后端的完整载荷
+  const payload = {
+    parent_content,
+    title,
+    rationales,
+    instruction: instruction.value,
+    goal: goal.value,
+    user_id: props.userId, 
+    design_background: props.designBackground,
+    design_goal: props.designGoal,
+    parent_node_content: props.parentNodeContent,
+    parent_node_title:props.parentNodeTitle
+  };
+
+  console.log("Preparing to send payload to backend:", payload);
+
+  try {
+    // 3. 发送请求到后端
+    const response = await fetch("http://localhost:7001/textnode-analysis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Server responded with ${response.status}: ${errorText}`);
+    }
+
+    const responseData = await response.json();
+    console.log('Successfully received data from backend:', responseData);
+
+    // 4. 解析后端返回的数据 (逻辑复用自 handleGenerateTextNode)
+    const dataString = JSON.stringify(responseData.rationale);
+    const regex = /"([^"]+)"|'([^']+)'/g;
+    let matches;
+    const extractedBlocks = [];
+
+    while ((matches = regex.exec(dataString)) !== null) {
+      const content = matches[1] || matches[2];
+      extractedBlocks.push(content);
+    }
+    const newRationaleList = extractedBlocks.filter(block => block.length > 15);
+
+    if (newRationaleList.length === 0) {
+      console.warn(`No valid new rationales were found in the response.`);
+      alert('未从后端获取到有效的新论据。');
+      return;
+    }
+    
+    // 5. 将新的论据追加到现有节点的 rationales 数组中
+    if (!Array.isArray(nodeToUpdate.data.rationales)) {
+      nodeToUpdate.data.rationales = [];
+    }
+    nodeToUpdate.data.rationales.push(...newRationaleList);
+
+    // 6. 重新计算并更新节点的高度 (逻辑复用自 handleGenerateTextNode)
+    const headerHeight = 35; const itemPaddingY = 24; const itemGapY = 8;
+    const avgCharsPerLine = 35; const lineHeight = 16;
+    let totalContentHeight = 0;
+    
+    nodeToUpdate.data.rationales.forEach(text => {
+      const lineCount = Math.ceil((text.length || 1) / avgCharsPerLine);
+      totalContentHeight += (lineCount * lineHeight) + itemPaddingY + itemGapY;
+    });
+    
+    const calculatedHeight = headerHeight + totalContentHeight;
+    const finalHeight = Math.min(Math.max(calculatedHeight, 150), 600);
+
+    // 确保 dimensions 对象存在
+    if (!nodeToUpdate.dimensions) {
+      nodeToUpdate.dimensions = { width: nodeToUpdate.width || 250, height: 0 };
+    }
+    nodeToUpdate.dimensions.height = finalHeight;
+
+    // 7. 将画布标记为有未保存的更改
+    isSaved.value = false;
+    
+    //alert('新的论据已成功追加！');
+
+  } catch (error) {
+    console.error("Failed to send or process TextNode data:", error);
+    alert(`处理数据时出错: ${error.message}`);
+  }
+}
+
+// ✨ Major Refactor: 此函数现在创建 TextNode 而不是 ChainNode
 function handleCreateNodeFromText(text, sourceTextNode) {
   if (!text || !sourceTextNode) return;
+
   const { position, dimensions } = sourceTextNode;
   const nodeWidth = dimensions?.width || 250;
+  
   const newNode = {
-    id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
-    type: 'chain',
+    // 1. ID 和类型已更新为 'text'
+    id: `sub-text-node-${props.nodeId}-${subNodeIdCounter.value++}`,
+    type: 'text',
+    
+    // 2. 将新节点放置在源节点旁边，以获得良好的用户体验
     position: { x: position.x + nodeWidth + 60, y: position.y },
-    width: 120,
-    height: 80,
-    data: { content: text, color: newNodeColor.value, connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] }, isManual: true },
+    
+    // 3. 为新的 TextNode 设置合理的默认尺寸
+    width: 400,
+    height: sourceTextNode.height,
+    
+    // 4. 将传入的文本作为新节点的第一个 rationale 项
+    data: { rationales: [text] },
   };
+
   subflow.addNodes([newNode]);
 }
+
 
 watch(chainList, (newChainList) => {
     emit('update:data', {
@@ -183,6 +297,7 @@ async function handleSaveButton() {
     };
 
     emit('save-snapshot', snapshotPayload);
+    isSaved.value = true;
   } catch (error) {
     console.error("Error creating sub-canvas snapshot:", error);
   } finally {
@@ -281,7 +396,7 @@ function placeNodeOnClick(event) {
           ...baseNode,
           type: 'chain',
           width: 120,
-          height: 80,
+          height: 60,
           data: { ...baseNode.data, content: '', connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] }, isManual: true },
       };
   }
@@ -329,22 +444,12 @@ function onSubCanvasConnect(params) {
   subflow.addEdges([newEdge]);
 }
 
-function toggleFreeze() {
-  isFrozen.value = !isFrozen.value;
-  const isDraggable = !isFrozen.value;
-  for (const node of subflow.getNodes.value) {
-    if (node.id !== 'ghost-node') {
-      node.draggable = isDraggable;
-      node.selectable = isDraggable;
-    }
-  }
-}
-
 watch([subflow.nodes, subflow.edges], () => {
   emit('update:graph', {
     nodeId: props.nodeId,
     nodes: subflow.getNodes.value.filter(n => n.type !== 'rating'),
     edges: subflow.getEdges.value,
+    isSaved : isSaved.value
   });
 }, { deep: true });
 
@@ -375,7 +480,7 @@ function generateNodeChain(nodeDataList) {
     const content = element || '';
     const newNode = {
       id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`, type: 'chain',
-      position: { x: startX + index * gapX, y: startY }, width: 120, height: 80,
+      position: { x: startX + index * gapX, y: startY }, width: 120, height: 70,
       data: { content: content, connections: { in: [], out: [] } },
     };
     newNodes.push(newNode);
@@ -442,7 +547,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             design_goal: props.designGoal
         };
 
-        const response = await fetch('/api/generate-rationale', {
+        const response = await fetch('http://localhost:7001/generate-rationale', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -485,14 +590,21 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
 
         if (existingTextNode) {
             existingTextNode.data.rationales = rationaleList;
+            existingTextNode.data.parent_content = sourceNode.data.content
+            console.log(sourceNode.data.content)
             if (!existingTextNode.dimensions) existingTextNode.dimensions = { width: 250, height: 0 };
             existingTextNode.dimensions.height = finalHeight;
         } else {
             const newTextNode = {
                 id: `sub-text-node-${props.nodeId}-${subNodeIdCounter.value++}`, type: 'text',
                 position: { x: position.x, y: position.y + TEXT_NODE_OFFSET_Y },
-                width: 250, height: finalHeight, data: { rationales: rationaleList },
+                width: 250, height: finalHeight, 
+                
+                data: { rationales: rationaleList,
+                  parent_content : sourceNode.data.content
+                 },
             };
+            console.log(sourceNode.data.content)
             const newEdge = {
                 id: `sub-content-edge-${newTextNode.id}-to-${sourceNode.id}`, source: newTextNode.id, target: sourceNode.id,
                 sourceHandle: 'bottom', targetHandle: 'top', type: 'smoothstep', animated: true,
@@ -529,7 +641,7 @@ async function handleSubCanvasRun() {
         if (edgesToRemove.length > 0) subflow.removeEdges(edgesToRemove.map(e => e.id));
         subflow.removeNodes(nodeIdsToRemove);
     }
-    const url = "/api/generate-thinking-chain";
+    const url = "http://localhost:7001/generate-thinking-chain";
     const payload = {
       design_background: props.designBackground, design_goal: props.designGoal,
       parent_node_content: props.parentNodeContent, parent_node_title : props.parentNodeTitle,
@@ -594,11 +706,11 @@ onUnmounted(() => {
       <div class="sub-canvas-header" @mousedown="onHeaderMouseDown">
         <span class="title">✏️ {{ nodeName }}</span>
         <div class="header-actions">
-           <button class="save-btn" @click="handleSaveButton" :disabled="isSaveButtonRunning" title="Save this LLM Chain">
+           <button class="save-btn" @click="handleSaveButton" :disabled="isSaveButtonRunning || isSaved" title="Save this LLM Chain">
             <div v-if="isSaveButtonRunning" class="spinner"></div>
             <span v-else>Save</span>
           </button>
-          <button @click="emit('close', { nodes: subflow.getNodes.value, edges: subflow.getEdges.value })"  class="close-btn" title="Close Canvas">×</button>
+          <button @click="emit('close', { nodes: subflow.getNodes.value, edges: subflow.getEdges.value, isSaved: isSaved.valueOf })"  class="close-btn" title="Close Canvas">×</button>
         </div>
       </div>
       <div class="upper-area">
@@ -619,7 +731,7 @@ onUnmounted(() => {
             <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
               <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" />
             </svg>
-            <span>Run</span>
+            <span>Generate</span>
           </button>
         </div>
       </div>
@@ -659,10 +771,11 @@ onUnmounted(() => {
           <template #edge-custom="props">
               <CustomEdge v-bind="props" @delete-edge="onEdgeDeleteInSubCanvas" />
           </template>
-          <template #node-text="textProps">
+            <template #node-text="textProps">
             <TextNode
               v-bind="textProps"
-              @update:rationales="handleRationalesUpdate"
+              @update-node-data="handleNodeDataUpdate"
+              @regenerate="handleTextNodeSendData"
               @create-node-from-text="handleCreateNodeFromText($event, textProps)"
             />
           </template>

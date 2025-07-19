@@ -12,24 +12,18 @@ const props = defineProps({
   data: {
     type: Object,
     required: true,
-    default: () => ({ rationales: [], content: '' }),
+    default: () => ({ rationales: [], content: '', color: '#34495e' }),
   },
   selected: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['delete', 'open-canvas', 'update-node-data', 'snapshot-dropped', 'content-changed']);
 
-// --- 核心逻辑：rationales 和 content 同步 ---
+// --- 核心逻辑：rationales 和 content 同步 (保持不变) ---
 const rationales = ref([]);
 const listContainerRef = ref(null);
-
-// ✨ 新增: 计算属性，用于从 rationales 数组实时生成 content 字符串
-// The computed property to generate the content string from the rationales array in real-time.
 const content = computed(() => rationales.value.join('\n'));
 
-// ✨ 修改: 智能初始化逻辑
-// On creation, if `rationales` is provided, use it. Otherwise, if `content` is provided, use that.
-// This ensures compatibility with nodes created with either `content` or `rationales`.
 if (props.data.rationales && props.data.rationales.length > 0) {
   rationales.value = [...props.data.rationales];
 } else if (props.data.content) {
@@ -38,15 +32,9 @@ if (props.data.rationales && props.data.rationales.length > 0) {
   rationales.value = [''];
 }
 
-// ✨ 修改: 监听外部 rationales 变化 (例如应用快照)
-// Watch for external changes to rationales (e.g., applying a snapshot).
 watch(() => props.data.rationales, (newRationales) => {
-  // 通过比较JSON字符串避免不必要更新和无限循环
-  // Avoid unnecessary updates and infinite loops by comparing JSON strings.
   if (newRationales && JSON.stringify(newRationales) !== JSON.stringify(rationales.value)) {
     rationales.value = newRationales;
-    // 确保至少有一个空的编辑块
-    // Ensure there is at least one empty block for editing.
     if (rationales.value.length === 0) {
       rationales.value.push('');
     }
@@ -169,14 +157,14 @@ async function handleKeyDown(event, index) {
   }
 }
 
-// --- ✨ 修改: 统一的数据更新事件 ---
+// --- 统一的数据更新事件 (保持不变) ---
 function emitUpdate() {
   emit('update-node-data', {
     id: props.id,
     data: {
       ...props.data,
       rationales: rationales.value,
-      content: content.value, // ✨ 核心: 总是将同步后的 content 字符串包含在更新中
+      content: content.value,
     }
   });
   emit('content-changed', props.id);
@@ -198,7 +186,6 @@ function startEditTitle() {
 
 function saveTitle() {
   isEditingTitle.value = false;
-  // emitUpdate will handle sending the title change along with other data
   emitUpdate();
 }
 
@@ -273,6 +260,7 @@ function onOpenCanvas() {
     </template>
 
     <div class="node-header" :style="nodeHeaderStyle">
+      <!-- 颜色选择器已被移除 -->
       <div class="title-container" v-if="!isEditingTitle">
         <strong @click.stop="startEditTitle" title="Click to edit title">
           {{ data.title || "New Node" }}
@@ -280,6 +268,7 @@ function onOpenCanvas() {
       </div>
       <input v-else ref="titleInput" v-model="data.title" @blur="saveTitle" @keydown.enter="saveTitle" @click.stop
         @mousedown.stop class="title-input" type="text" />
+
       <div v-if="data.appliedSnapshotId" class="snapshot-indicator" title="Applied Snapshot">
         <span class="icon" :style="{ backgroundColor: data.appliedSnapshotColor || '#27ae60' }"></span>
         ID:{{ data.appliedSnapshotId }}
@@ -315,8 +304,6 @@ function onOpenCanvas() {
         </div>
       </div>
     </div>
-    
-    
   </div>
 
   <Teleport to="body">
@@ -368,6 +355,12 @@ function onOpenCanvas() {
   align-items: center;
   transition: background-color 0.2s;
   flex-shrink: 0;
+  gap: 8px; /* Add gap for spacing */
+}
+
+.title-container {
+  flex-grow: 1;
+  min-width: 0; /* 确保在 flex 布局中可以被压缩 */
 }
 
 .node-header strong {
@@ -375,7 +368,7 @@ function onOpenCanvas() {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: text;
-  width: 100%;
+  display: block; /* 确保 ellipsis 生效 */
 }
 
 .title-input {
@@ -389,6 +382,8 @@ function onOpenCanvas() {
   width: 100%;
   padding: 0;
   margin: 0;
+  flex-grow: 1;
+  min-width: 0;
 }
 
 .delete-btn {
@@ -401,6 +396,7 @@ function onOpenCanvas() {
   line-height: 1;
   opacity: 0.8;
   transition: opacity 0.2s;
+  flex-shrink: 0; /* Prevent button from shrinking */
 }
 
 .delete-btn:hover {
@@ -408,7 +404,6 @@ function onOpenCanvas() {
   color: #e74c3c;
 }
 
-/* --- 新增/移植的 rationales 列表样式 (来自 TextNode.vue) --- */
 .rationales-list {
   flex-grow: 1;
   padding: 8px;
@@ -499,31 +494,6 @@ function onOpenCanvas() {
   
 }
 
-.add-rationale-footer {
-  padding: 4px 8px;
-  border-top: 1px solid #e5e7eb;
-  background-color: #f9fafb;
-  flex-shrink: 0;
-}
-
-.add-new-btn {
-  width: 100%;
-  background-color: transparent;
-  color: #6b7280;
-  border: 1px dashed #d1d5db;
-  border-radius: 6px;
-  padding: 6px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.add-new-btn:hover {
-  background-color: #f3f4f6;
-  border-color: #9ca3af;
-  color: #374151;
-}
-
-/* --- 拖拽占位符和克隆项的样式 (来自 TextNode.vue) --- */
 .rationale-item-clone {
   cursor: grabbing;
   box-shadow: 0 10px 25px rgba(0,0,0,0.2);
@@ -548,7 +518,6 @@ function onOpenCanvas() {
   border-color: #3b82f6;
 }
 
-/* --- 其余样式 (保持不变) --- */
 :deep(.resizer-handle) { 
   width: 8px; height: 8px; 
   background-color: transparent; border-radius: 2px; border: 2px solid transparent; }

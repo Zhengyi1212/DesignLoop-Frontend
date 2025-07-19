@@ -1,7 +1,8 @@
 <script setup>
 import { ref } from 'vue';
 
-// Add a new prop to track if we are in "add run node" mode
+// The 'newNodeColor' prop has been renamed to 'activeColor' for clarity.
+// It now represents the color for both new nodes and selected nodes.
 defineProps({
   isAddingNode: {
     type: Boolean,
@@ -11,13 +12,9 @@ defineProps({
     type: Boolean,
     default: false,
   },
-  newNodeColor: {
+  activeColor: {
     type: String,
     default: '#34495e',
-  },
-  newGroupColor: {
-    type: String,
-    default: '#FFC0CB',
   },
   isAddGroup: {
     type: Boolean,
@@ -33,24 +30,25 @@ defineProps({
   }
 });
 
-// Add a new event for the run node mode
-const emit = defineEmits(['toggle-add-node-mode', 'toggle-add-run-node-mode', 'update:newNodeColor', 'toggle-add-group-mode','rate-clicked']);
+// The emit event is also updated to 'update:activeColor'.
+const emit = defineEmits(['toggle-add-node-mode', 'toggle-add-run-node-mode', 'update:activeColor', 'toggle-add-group-mode','rate-clicked']);
 
 const colorPicker = ref(null);
+
 function handleRateClick() {
   emit('rate-clicked');
 }
+
 function handleAddNodeClick() {
   emit('toggle-add-node-mode');
 }
 
-// Function to handle the new "Run Node" button click
 function handleAddRunNodeClick() {
   emit('toggle-add-run-node-mode');
 }
 
-function onColorChange(event) { // 'update:newGroupColor'
-  emit('update:newNodeColor', event.target.value);
+function onColorChange(event) {
+  emit('update:activeColor', event.target.value);
 }
 
 function handleGroupClick() {
@@ -60,17 +58,17 @@ function handleGroupClick() {
 function openColorPicker() {
   colorPicker.value.click();
 }
-
-//function handleUnshow() {
- // emit('is-showing-runnode')
-//}
 </script>
 
 <template>
   <div class="toolbar-container">
     <div class="tool-section">
+      <button class="tool-button color-picker-btn" @click="openColorPicker" title="Select color for new or selected nodes">
+        <div class="color-swatch" :style="{ backgroundColor: activeColor }"></div>
+        <input type="color" ref="colorPicker" :value="activeColor" @input="onColorChange" class="hidden-color-input" />
+      </button>
       <button class="tool-button" :class="{ active: isAddingNode }"
-        :style="{ backgroundColor: isAddingNode ? newNodeColor : '', borderColor: isAddingNode ? newNodeColor : '' }"
+        :style="{ backgroundColor: isAddingNode ? activeColor : '', borderColor: isAddingNode ? activeColor : '' }"
         @click="handleAddNodeClick" title="Click to add a new customizable node.">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round">
@@ -79,7 +77,6 @@ function openColorPicker() {
         <span>New Node</span>
       </button>
 
-      <!-- New Button: Run Node -->
       <button v-if="isShow" class="tool-button" :class="{ active: isAddingRunNode }"
         @click="handleAddRunNodeClick" title="Click to add a new executable AI Node">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -90,7 +87,7 @@ function openColorPicker() {
       </button>
 
       <button class="tool-button" :class="{ active: isAddGroup }"
-        :style="{ backgroundColor: isAddGroup ? newNodeColor : '', borderColor: isAddGroup ? newNodeColor : '' }"
+        :style="{ backgroundColor: isAddGroup ? activeColor : '', borderColor: isAddGroup ? activeColor : '' }"
         @click="handleGroupClick" title="Click to add a new group base.">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           stroke-linecap="round" stroke-linejoin="round">
@@ -99,32 +96,27 @@ function openColorPicker() {
         <span>New Group</span>
       </button>
 
-      <button class="tool-button color-picker-btn" @click="openColorPicker" title="Select new node color">
-        <div class="color-swatch" :style="{ backgroundColor: newNodeColor }"></div>
-
-        <input type="color" ref="colorPicker" :value="newNodeColor" @input="onColorChange" class="hidden-color-input" />
-      </button>
     </div>
     <div class="tool-section">
-    <button 
-        v-if="showRateButton" 
-        class="tool-button-rate" 
-        @click="handleRateClick" 
+      <button
+        v-if="showRateButton"
+        class="tool-button-rate"
+        @click="handleRateClick"
         title="Rate"
       >
         <span>Rate LLM responses in this Chain</span>
       </button>
-  </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .toolbar-container {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 20px;
-  gap: 20px;
+  padding: 20px 10px;
+  gap: 16px;
   height: 55px;
   border-radius: 18px;
   background-color: #ffffff;
@@ -136,15 +128,14 @@ function openColorPicker() {
 .tool-section {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 8px;
 }
 
-.tool-button, 
+.tool-button,
 .tool-button-rate{
   display: flex;
   align-items: center;
   gap: 8px;
- 
   padding: 4px 8px;
   border: 1px solid #ced4da;
   background-color: #fff;
@@ -161,7 +152,7 @@ function openColorPicker() {
   align-items: center;
   gap: 8px;
   height : 30px;
-  padding: 4px 8px;
+  padding: 4px 4px;
   border: 1px solid #ced4da;
   background-color: #fff;
   border-radius: 18px;
@@ -187,7 +178,6 @@ function openColorPicker() {
   stroke: white;
 }
 
-/* Style for the active Run Node button */
 .tool-button:nth-child(2).active {
   background-color: #f39c12;
   border-color: #f39c12;

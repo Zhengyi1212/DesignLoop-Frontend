@@ -16,7 +16,6 @@ import SnapshotDetailModal  from './components/SnapshotDetailModal.vue';
 const CustomNode = defineAsyncComponent(() => import('./components/CustomNode.vue'));
 const RunNode = defineAsyncComponent(() => import('./components/RunNode.vue'));
 const GroupNode = defineAsyncComponent(() => import('./components/GroupNode.vue'));
-
 const RatingNode = defineAsyncComponent(() => import('./components/RatingNode.vue'));
 
 
@@ -26,6 +25,7 @@ let snapshotIdCounter = 0;
 const pipelineCounter = ref(-1)
 const pipelineOffset = 200;
 
+// --- 核心修改 1: 从解构中移除 onSelectionChange ---
 const { addNodes, addEdges, removeEdges, findNode, removeNodes, project, onPaneMouseMove, getNodes, getSelectedNodes } = useVueFlow();
 
 const nodes = ref([]);
@@ -41,7 +41,6 @@ const isFetchingPipeline = ref(false);
 const runningNodeId = ref(null);
 const vueFlowRef = ref(null);
 const snapshots = ref([]);
-const newNodeColor = ref('#FBF29B');
 const isDetailModalVisible = ref(false);
 const selectedSnapshotForDetail = ref(null);
 
@@ -49,6 +48,28 @@ const isAddingNode = ref(false);
 const isAddingRunNode = ref(false);
 const isAddingGroup = ref(false);
 const isShowingRunNode = ref(true);
+
+const activeColor = ref('#FBF29B');
+
+// --- 核心修改 2: 使用 watch 替代 onSelectionChange ---
+// 监听 getSelectedNodes (一个来自 useVueFlow 的计算属性 ref)
+watch(getSelectedNodes, (selectedNodes) => {
+  // 当只选中一个节点时，更新颜色选择器
+  if (selectedNodes.length === 1 && selectedNodes[0].data && selectedNodes[0].data.color) {
+    activeColor.value = selectedNodes[0].data.color;
+  }
+});
+
+// 监听 activeColor 的变化，并将其应用到选中的节点上
+watch(activeColor, (newColor) => {
+  const selectedNodes = getSelectedNodes.value;
+  selectedNodes.forEach(node => {
+    if (node.data) {
+      node.data.color = newColor;
+    }
+  });
+});
+
 
 // --- Session
 const isSessionExpired = ref(false);
@@ -79,7 +100,6 @@ const snapshotColorPalette = [
 ];
 const snapshotColorIndex = ref(0);
 
-// 3. Add this helper function to get the next color
 function getNextSnapshotColor() {
   const color = snapshotColorPalette[snapshotColorIndex.value];
   snapshotColorIndex.value = (snapshotColorIndex.value + 1) % snapshotColorPalette.length;
@@ -120,9 +140,9 @@ function addRatingNode({ position, type, context = {} }) {
     type: 'rating',
     position,
     data: { context },
-    zIndex: 1000, 
-    draggable: true, // 
-    selectable: false, 
+    zIndex: 1000,
+    draggable: true,
+    selectable: false,
   };
   addNodes([newNode]);
 }
@@ -132,10 +152,7 @@ function handleRatingClose(nodeId) {
 }
 
 async function handleRatingSubmit(payload) {
-
   console.log('Received payload from RatingNode:', payload);
-
-
   const runNodeTitle = payload.context.title;
   const runNodeContent = payload.context.content;
   const ratings = payload.ratings
@@ -145,32 +162,24 @@ async function handleRatingSubmit(payload) {
       headers: {
         "Content-Type": "application/json",
       },
-     
       body: JSON.stringify({
         ratings: ratings,
         node_title: runNodeTitle,
         node_content: runNodeContent,
         user_id: instructionPanels.value[0].content,
-
       }),
     });
-
     if (!response.ok) {
       throw new Error(`Server responded with ${response.status}`);
     }
-
     const responseData = await response.json();
     console.log('Backend response:', responseData);
-
   } catch (error) {
     console.error("Failed to submit rating:", error);
   } finally {
-  
     removeNodes([payload.nodeId]);
   }
 }
-
-
 
 function manageSession() {
   const lastActivity = sessionStorage.getItem('sessionTimestamp');
@@ -207,23 +216,18 @@ function ensureGroupAtBottom() {
     ...nodes.value.filter(n => n.type === 'group'),
     ...nodes.value.filter(n => n.type !== 'group'),
   ];
-
   const oldOrder = nodes.value.map(n => n.id).join(',');
   const newOrder = sorted.map(n => n.id).join(',');
-
   if (oldOrder !== newOrder) {
     nodes.value = sorted;
   }
 }
 
-
 watch(
   [nodes, edges, instructionPanels, snapshots],
-  
-    saveState,
+  saveState,
   { deep: true }
 );
-
 
 const DEFAULT_PANEL_WIDTH = 200;
 const MIN_PANEL_WIDTH = 40;
@@ -289,11 +293,11 @@ onPaneMouseMove((event) => {
       ghostData = { title: 'Edit instruction...', content: 'Click to place', color: '#f1c40f' };
   } else if (isAddingGroup.value) {
       ghostType = 'group';
-      ghostData = { label: 'Group', color: newNodeColor.value };
+      ghostData = { label: 'Group', color: activeColor.value };
       ghostDimensions = { width: 380, height: 260 };
   } else {
       ghostType = 'custom';
-      ghostData = { title: 'New Node', content: 'Click to place', color: newNodeColor.value };
+      ghostData = { title: 'New Node', content: 'Click to place', color: activeColor.value };
   }
 
   if (ghostNode) {
@@ -310,7 +314,7 @@ function placeNodeOnClick(event) {
     const ghostNode = findNode('ghost-node');
     if (!ghostNode) return;
 
-    let newNode = { id: `node-${nodeIdCounter++}`, position: { ...ghostNode.position }, data: { color: newNodeColor.value } };
+    let newNode = { id: `node-${nodeIdCounter++}`, position: { ...ghostNode.position }, data: { color: activeColor.value } };
 
     if (isAddingGroup.value) {
         newNode = { ...newNode, type: 'group', zIndex: 0, width: 400, height: 300, data: { ...newNode.data, label: 'My Group' } };
@@ -322,7 +326,6 @@ function placeNodeOnClick(event) {
     addNodes(newNode);
     nextTick(() => { setAddMode(null); });
 }
-
 
 function onConnect(connection) {
   const sourceNode = findNode(connection.source);
@@ -372,7 +375,7 @@ function removeConnectionData(edge) {
 
 function handleDuplicateNode() {
   const selectedNodes = getSelectedNodes.value;
-  if (selectedNodes.length !== 1) return; 
+  if (selectedNodes.length !== 1) return;
   const originalNode = selectedNodes[0];
   if (originalNode.id === 'ghost-node') return;
   const newNode = {
@@ -386,7 +389,6 @@ function handleDuplicateNode() {
   };
   addNodes([newNode]);
 }
-
 
 function handleKeyDown(event) {
   if (activeSubCanvasData.value) return;
@@ -415,42 +417,34 @@ function handleOpenSubCanvas(nodeId) {
       };
 }
 
-function handleCloseSubCanvas(payload) { 
+function handleCloseSubCanvas(payload) {
   if (!activeSubCanvasData.value) return;
-
-
   const parentNodeId = activeSubCanvasData.value.id;
   const parentNode = findNode(parentNodeId);
-  
   if (parentNode && parentNode.data.appliedSnapshotId && payload) {
     const linkedSnapshotId = parentNode.data.appliedSnapshotId;
-
     const snapshotToUpdate = snapshots.value.find(s => s.id === linkedSnapshotId);
-
     if (snapshotToUpdate) {
       snapshotToUpdate.data.subGraph = {
         nodes: JSON.parse(JSON.stringify(payload.nodes)),
         edges: JSON.parse(JSON.stringify(payload.edges)),
       };
-      
       parentNode.data.isSaved = payload.isSaved;
       snapshotToUpdate.data.instruction = parentNode.data.instruction;
       snapshotToUpdate.data.goal = parentNode.data.goal;
       snapshotToUpdate.goal = parentNode.data.goal;
     }
   }
-
- 
-  activeSubCanvasData.value = null; 
+  activeSubCanvasData.value = null;
 }
 
 function handleSubCanvasUpdate(event) {
     const parentNode = findNode(event.nodeId);
-    if (parentNode) { 
-        parentNode.data.subGraph = { 
-            nodes: JSON.parse(JSON.stringify(event.nodes)), 
-            edges: JSON.parse(JSON.stringify(event.edges)), 
-        }; 
+    if (parentNode) {
+        parentNode.data.subGraph = {
+            nodes: JSON.parse(JSON.stringify(event.nodes)),
+            edges: JSON.parse(JSON.stringify(event.edges)),
+        };
         parentNode.data.isSaved = event.isSaved;
     }
 }
@@ -461,71 +455,48 @@ function handleSubCanvasDataUpdate(event) {
         parentNode.data.instruction = event.instruction;
         parentNode.data.goal = event.goal;
         parentNode.data.chain = event.chain;
-        
     }
 }
 
 function handleSaveSnapshot(snapshotPayload) {
   const parentNode = findNode(snapshotPayload.parentNodeId);
   if (!parentNode) return;
-
-  // 核心修改: 确保快照数据包含父节点的内容
-  // Core change: Ensure snapshot data includes the parent node's content.
   const fullSnapshotData = {
     ...snapshotPayload.data,
     rationales: JSON.parse(JSON.stringify(parentNode.data.rationales || [])),
     content: parentNode.data.content || '',
   };
-
    const newSnapshot = {
     id: `${snapshotIdCounter++}`,
     parentNodeId: snapshotPayload.parentNodeId,
     parentNodeTitle: snapshotPayload.parentNodeTitle,
     goal: snapshotPayload.data.goal,
     color: getNextSnapshotColor(),
-    data: fullSnapshotData // 使用我们增强后的数据
+    data: fullSnapshotData
   };
-
-
   snapshots.value.push(newSnapshot);
-
-
   if (!parentNode.data) parentNode.data = {};
   parentNode.data.appliedSnapshotId = newSnapshot.id;
 }
 
-// ✨ 修改: 优化 handleApplySnapshot 逻辑
 function handleApplySnapshot({ nodeId, snapshotData }) {
   const targetNode = findNode(nodeId);
   if (!targetNode) return;
-
-  // --- 新增逻辑: 删除旧的快照 ---
-  // 1. 获取当前节点关联的旧快照ID
   const oldSnapshotId = targetNode.data.appliedSnapshotId;
-
-  // 2. 如果存在旧快照ID，则从主快照列表中移除
   if (oldSnapshotId) {
     const oldSnapshotIndex = snapshots.value.findIndex(s => s.id === oldSnapshotId);
     if (oldSnapshotIndex !== -1) {
       snapshots.value.splice(oldSnapshotIndex, 1);
     }
   }
-  // --- 新增逻辑结束 ---
-
   const dataToApply = snapshotData.data;
   const newSnapshotId = `${snapshotIdCounter++}`;
-
-  // Update sub-canvas related data
   targetNode.data.instruction = dataToApply.instruction;
   targetNode.data.goal = dataToApply.goal;
-  
-  // 核心修改: 在应用快照时过滤掉 TextNode
-  // Core change: Filter out TextNodes when applying a snapshot.
   if (dataToApply.subGraph && dataToApply.subGraph.nodes) {
     const nodesToApply = dataToApply.subGraph.nodes.filter(n => n.type !== 'text');
     const nodeIdsToKeep = new Set(nodesToApply.map(n => n.id));
     const edgesToApply = (dataToApply.subGraph.edges || []).filter(e => nodeIdsToKeep.has(e.source) && nodeIdsToKeep.has(e.target));
-    
     targetNode.data.subGraph = {
         nodes: JSON.parse(JSON.stringify(nodesToApply)),
         edges: JSON.parse(JSON.stringify(edgesToApply)),
@@ -533,57 +504,38 @@ function handleApplySnapshot({ nodeId, snapshotData }) {
   } else {
     targetNode.data.subGraph = { nodes: [], edges: [] };
   }
-  
   targetNode.data.chain = dataToApply.chain;
-
-  // 同时更新 rationales 和 content 以确保兼容性
-  // Update both rationales and content at the same time to ensure compatibility.
   if (dataToApply.rationales && dataToApply.rationales.length > 0) {
     targetNode.data.rationales = JSON.parse(JSON.stringify(dataToApply.rationales));
     targetNode.data.content = dataToApply.rationales.join('\n');
-  } else if (dataToApply.content) { // Fallback for older snapshots
+  } else if (dataToApply.content) {
     targetNode.data.content = dataToApply.content;
     targetNode.data.rationales = [dataToApply.content];
   }
-
-  // Update visual indicator
   targetNode.data.hasSnapshot = true;
   targetNode.data.appliedSnapshotId = newSnapshotId;
-  
-  // Create a full, deep copy of the snapshot to add to the panel
   const newSnapshotCopy = {
     id: newSnapshotId,
     color: snapshotData.color || getNextSnapshotColor(),
     parentNodeId: targetNode.id,
-    parentNodeTitle: targetNode.data.title, 
+    parentNodeTitle: targetNode.data.title,
     goal: dataToApply.goal,
     data: JSON.parse(JSON.stringify(dataToApply))
   };
-  
   targetNode.data.appliedSnapshotColor = newSnapshotCopy.color;
-  
   snapshots.value.push(newSnapshotCopy);
 }
 
-
-
-
-
-// ✨ 修改: 修正节点更新逻辑
 function handleNodeUpdate(event) {
   const node = findNode(event.id);
   if (node) {
-    // 使用对象扩展运算符(...)来合并数据，确保所有属性(包括 rationales 和 content)都被正确更新
-    // Use the spread operator (...) to merge data, ensuring all properties (including rationales and content) are updated correctly.
     node.data = { ...node.data, ...event.data };
   }
 }
 
-
 async function handleNodeRun(nodeId) {
     const node = findNode(nodeId);
     if (!node || runningNodeId.value) return;
-
     runningNodeId.value = nodeId;
     node.data.content = 'Running...';
     const successors = findPredecessors(nodeId, nodes.value, edges.value);
@@ -602,21 +554,7 @@ async function handleNodeRun(nodeId) {
         });
         if (!response.ok) throw new Error(`Server responded with ${response.status}`);
         const data = await response.json();
-        node.data.content = data.content; 
-        
-       /*
-        const position = {
-            x: node.position.x + (node.dimensions?.width || 200) + 20,
-            y: node.position.y,
-        };
-
-        // 调用新的函数添加反馈节点
-        addRatingNode({
-          position,
-          type: 'run-node',
-          context: { nodeId: nodeId, result: data.content }
-        });
-*/
+        node.data.content = data.content;
     } catch (error) {
         node.data.content = "Error: " + error.message;
     } finally {
@@ -627,19 +565,17 @@ async function handleNodeRun(nodeId) {
 function handleShowRating({ nodeId }) {
   const node = findNode(nodeId);
   if (!node) return;
-
   const position = {
     x: node.position.x + (node.dimensions?.width || 200) + 20,
     y: node.position.y,
   };
-
   addRatingNode({
     position,
     type: 'run-node-rating',
     context: {
-      runNodeId: nodeId, 
-      title: node.data.title, 
-      content: node.data.content, //
+      runNodeId: nodeId,
+      title: node.data.title,
+      content: node.data.content,
     }
   });
 }
@@ -694,7 +630,6 @@ function handleRunTriggered(targetNodeId) {
   }
 }
 
-//handleFetchPipeline
 async function handleFetchPipeline(payload) {
   isFetchingPipeline.value = true;
   try {
@@ -710,7 +645,6 @@ async function handleFetchPipeline(payload) {
     if (!response.ok) throw new Error(`Server responded with ${response.status}`);
     const data = await response.json();
     instructionPanels.value[3].content = Array.isArray(data.pipeline) ? data.pipeline.join('\n') : String(data.pipeline);
-
   } catch (error) {
     console.error("Error during pipeline request:", error);
   } finally {
@@ -718,64 +652,53 @@ async function handleFetchPipeline(payload) {
   }
 }
 
-// ✨ 修改: 优化 node_chain_autogene 逻辑
 async function node_chain_autogene(nodeData) {
   pipelineCounter.value++;
   if (!Array.isArray(nodeData) || nodeData.length === 0) return;
-  const newNodes = []; 
+  const newNodes = [];
   const newEdges = [];
-  const startX = 100; 
-  const startY = 200 + pipelineOffset * pipelineCounter.value; 
+  const startX = 100;
+  const startY = 200 + pipelineOffset * pipelineCounter.value;
   const gapX = 250;
-  
   nodeData.forEach((data, index) => {
-    const pipelineContent = data.pipeline_content || ''; // 将内容存为变量
+    const pipelineContent = data.pipeline_content || '';
     const newNode = {
-      id: `chain-node-${nodeIdCounter++}`, 
+      id: `chain-node-${nodeIdCounter++}`,
       type: 'custom',
       position: { x: startX + index * gapX, y: startY },
-      style: { width: '200px', height: '200px' }, 
+      style: { width: '200px', height: '200px' },
       data: {
         title: data.pipeline_title || 'Untitled Node',
-        // 核心修改: 同时创建 rationales 和 content 保证数据一致性
-        // Core change: Create rationales and content at the same time to ensure data consistency.
-        rationales: [ pipelineContent ], 
+        rationales: [ pipelineContent ],
         content: pipelineContent,
-        color: newNodeColor.value,
-        connections: { in: [], out: [] }, 
+        color: activeColor.value,
+        connections: { in: [], out: [] },
         subGraph: { nodes: [], edges: [] },
       },
     };
     newNodes.push(newNode);
   });
-
   for (let i = 1; i < newNodes.length; i++) {
-    const sourceNode = newNodes[i - 1]; 
+    const sourceNode = newNodes[i - 1];
     const targetNode = newNodes[i];
     const newEdge = {
-      id: `chain-edge-${sourceNode.id}-to-${targetNode.id}`, 
-      source: sourceNode.id, 
+      id: `chain-edge-${sourceNode.id}-to-${targetNode.id}`,
+      source: sourceNode.id,
       target: targetNode.id,
-      sourceHandle: 'right', 
-      targetHandle: 'left', 
-      type: 'custom', 
-      selectable: true, 
+      sourceHandle: 'right',
+      targetHandle: 'left',
+      type: 'custom',
+      selectable: true,
       interactionWidth: 30,
     };
     newEdges.push(newEdge);
     sourceNode.data.connections.out.push({ edgeId: newEdge.id, targetId: targetNode.id, sourceHandle: 'right' });
     targetNode.data.connections.in.push({ edgeId: newEdge.id, sourceId: sourceNode.id, targetHandle: 'left' });
   }
-  
-  addNodes(newNodes); 
-  
-  // 使用 nextTick 确保节点渲染完毕后再添加边，防止坐标错误
-  // Use nextTick to ensure that nodes are rendered before adding edges to prevent coordinate errors.
+  addNodes(newNodes);
   await nextTick();
-  
   addEdges(newEdges);
 }
-
 
 async function handleGeneration(payload) {
   isGenerating.value = true;
@@ -790,7 +713,6 @@ async function handleGeneration(payload) {
     if (!response.ok) throw new Error(`Server responded with ${response.status}`);
     const data = await response.json();
     if (data) node_chain_autogene(data);
-
   } catch (error) {
     console.error("Error during node chain request:", error);
   } finally {
@@ -851,7 +773,6 @@ onBeforeUnmount(() => {
         ref="vueFlowRef"
         :min-zoom="0.1"
       >
-        <!-- 7. 注册新的 #node-rating 模板 -->
         <template #node-rating="props">
           <RatingNode
             v-bind="props"
@@ -860,7 +781,6 @@ onBeforeUnmount(() => {
           />
         </template>
 
-        <!-- Other Node Templates -->
         <template #node-custom="props">
           <CustomNode
             v-bind="props"
@@ -869,7 +789,6 @@ onBeforeUnmount(() => {
             @update-node-data="handleNodeUpdate"
             @content-changed="handleContentChanged"
             @snapshot-dropped="handleApplySnapshot"
-           
           />
         </template>
         <template #node-run="props">
@@ -890,7 +809,6 @@ onBeforeUnmount(() => {
           />
         </template>
 
-        <!-- Edge Template -->
         <template #edge-custom="props">
           <CustomEdge v-bind="props" @delete-edge="onEdgeDelete" />
         </template>
@@ -902,13 +820,11 @@ onBeforeUnmount(() => {
 
       <div class="main-toolbar-wrapper">
         <Toolbar
-          
           :is-adding-node="isAddingNode"
           :is-adding-run-node="isAddingRunNode"
           :is-add-group="isAddingGroup"
-          v-model:newNodeColor="newNodeColor"
+          v-model:activeColor="activeColor"
           :is-show="isShowingRunNode"
-         
           @toggle-add-node-mode="toggleAddNodeMode"
           @toggle-add-run-node-mode="toggleAddRunNodeMode"
           @toggle-add-group-mode="toggleAddGroupMode"
@@ -928,33 +844,29 @@ onBeforeUnmount(() => {
     </main>
 
     <!-- Right Panel -->
-    <div 
-      class="right-panel" 
-      :style="{ width: rightPanelWidth + 'px' }" 
+    <div
+      class="right-panel"
+      :style="{ width: rightPanelWidth + 'px' }"
       :class="{ 'is-collapsed': isRightPanelCollapsed }"
     >
       <div class="resizer" @mousedown="startResize"></div>
       <button class="expand-btn" v-if="isRightPanelCollapsed" @click="toggleRightPanel" title="Expand">
         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </button>
-      <CanvasNodePanel v-if="!isRightPanelCollapsed" 
-        :snapshots="snapshots" 
+      <CanvasNodePanel v-if="!isRightPanelCollapsed"
+        :snapshots="snapshots"
         @delete-snapshot="handleDeleteSnapshot"
-        @show-details="showSnapshotDetails" 
-
-
+        @show-details="showSnapshotDetails"
       />
-      
     </div>
 
-    <SnapshotDetailModal 
+    <SnapshotDetailModal
       :show="isDetailModalVisible"
       :snapshot="selectedSnapshotForDetail"
       @close="closeSnapshotDetails"
     />
   </div>
-    
-    <!-- Session Expiration Overlay -->
+
     <div v-if="isSessionExpired" class="session-expired-overlay">
       <div class="session-expired-box">
         <h2>Session expired</h2>
@@ -965,7 +877,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-/* Styles are unchanged, so they are omitted for brevity. You can copy them from your original file. */
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/core@1.45.0/dist/style.css';
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/core@1.45.0/dist/theme-default.css';
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/controls@latest/dist/style.css';

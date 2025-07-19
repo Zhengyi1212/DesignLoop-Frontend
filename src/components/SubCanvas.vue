@@ -161,7 +161,7 @@ async function handleTextNodeSendData({ id, title, rationales, parent_content })
 
   try {
     // 3. 发送请求到后端
-    const response = await fetch("/api/textnode-analysis", {
+    const response = await fetch("http://localhost:7001/textnode-analysis", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -547,7 +547,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             design_goal: props.designGoal
         };
 
-        const response = await fetch('/api/generate-rationale', {
+        const response = await fetch('http://localhost:7001/generate-rationale', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -559,6 +559,8 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
         }
 
         const data = await response.json();
+        const title = data.title ;
+        console.log(title)
         const dataString = JSON.stringify(data.rationale);
         const regex = /"([^"]+)"|'([^']+)'/g;
         let matches;
@@ -568,7 +570,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             const content = matches[1] || matches[2];
             extractedBlocks.push(content);
         }
-        const rationaleList = extractedBlocks.filter(block => block.length > 15);
+        const rationaleList = extractedBlocks.filter(block => block.length > 25);
 
         if (rationaleList.length === 0) {
             console.warn(`No text blocks longer than 15 characters were found inside single or double quotes. Total blocks extracted: ${extractedBlocks.length}`);
@@ -591,6 +593,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
         if (existingTextNode) {
             existingTextNode.data.rationales = rationaleList;
             existingTextNode.data.parent_content = sourceNode.data.content
+            existingTextNode.data.title = title
             console.log(sourceNode.data.content)
             if (!existingTextNode.dimensions) existingTextNode.dimensions = { width: 250, height: 0 };
             existingTextNode.dimensions.height = finalHeight;
@@ -601,7 +604,8 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
                 width: 250, height: finalHeight, 
                 
                 data: { rationales: rationaleList,
-                  parent_content : sourceNode.data.content
+                  parent_content : sourceNode.data.content,
+                  title: title
                  },
             };
             console.log(sourceNode.data.content)

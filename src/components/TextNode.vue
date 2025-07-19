@@ -14,7 +14,7 @@ const props = defineProps({
     required: true,
     default: () => ({ title: 'New Rationale', rationales: [] , parent_content:'',}),
   },
-  selected: { type: Boolean, default: false },
+
   dragging: Boolean,
   resizing: Boolean,
   selectable: Boolean,
@@ -223,16 +223,12 @@ function updateRationaleText(event, index) {
   }
 }
 
-const nodeSelectionStyle = computed(() => {
-  return props.selected
-    ? { boxShadow: '0 0 0 2px #2563EB, 0 6px 15px rgba(0,0,0,0.2)' }
-    : {};
-});
+
 </script>
 
 <template>
   <div class="text-node-container" :style="nodeSelectionStyle">
-    <NodeResizer :min-width="200" :min-height="200" :visible="selected" />
+    <NodeResizer :min-width="200" :min-height="200" :visible="false" />
     <Handle id="top" :position="Position.Top" />
     <Handle id="bottom" :position="Position.Bottom" />
     <Handle id="left" :position="Position.Left" />
@@ -275,8 +271,9 @@ const nodeSelectionStyle = computed(() => {
           @keydown="handleKeyDown($event)"
           v-text="rationale"
         ></div>
-        <button class="action-btn delete-btn" @click.stop="deleteRationale(index)" title="Delete this item">-</button>
+       
         <div class="rationale-actions">
+           <button class="action-btn delete-btn" @click.stop="deleteRationale(index)" title="Delete this item">-</button>
           <button class="create-node-btn" @click.stop="handleCreateNode(rationale)" title="Create node from this text">
             + Create Node
           </button>
@@ -292,9 +289,9 @@ const nodeSelectionStyle = computed(() => {
     </div>
     <div class="node-footer2">
       
-      <button @click="handleSendData" class="send-data-btn" :disabled="isSending" title="Send data to backend">
+      <button @click="handleSendData" class="send-data-btn" :disabled="isSending" title="">
         <div v-if="isSending" class="spinner"></div>
-        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="currentColor" viewBox="0 0 16 16">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
                 <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
           </svg>
       </button>
@@ -324,8 +321,8 @@ const nodeSelectionStyle = computed(() => {
 }
 .node-header {
   padding: 8px 12px;
-  background-color: #fde047;
-  border-bottom: 1px solid #facc15;
+  background-color: #fefce8;
+  border-bottom: 1px solid #fef9c8;
   flex-shrink: 0;
 }
 .node-header strong {
@@ -361,13 +358,36 @@ const nodeSelectionStyle = computed(() => {
 }
 .rationale-text:focus { outline: none; background-color: #eff6ff; box-shadow:transparent; }
 
-.rationale-actions { position: absolute; bottom: 8px; right: 8px; opacity: 0; transition: opacity 0.2s ease-in-out; }
-.delete-btn { position: absolute; top: 8px; right: 8px; opacity: 0; }
-.rationale-item:hover .rationale-actions,
-.rationale-item:hover .delete-btn { opacity: 1; }
+.rationale-actions {
+  position: absolute;
+  bottom: 8px;
+  left: 28px;   /* Position the container from the left */
+  right: 8px;  /* Position the container from the right */
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+
+ display: flex;
+  justify-content: flex-end; /* 将所有项目对齐到容器的末尾（右侧） */
+  align-items: center;
+  gap: 8px; /* 在按钮之间创建一个8px的间距，非常方便 */
+}
+
+.delete-btn {
+  /* The delete button no longer needs absolute positioning relative to its parent */
+  /* We can remove the positioning properties */
+  background-color: #fffbeb;
+  color: #c3c4c6;
+  border: 2px solid #c3c4c6;
+}
+
+.rationale-item:hover .rationale-actions {
+  opacity: 1;
+}
+
+
 
 .action-btn {
-  background-color: #e2e8f0; color: #475569; border: 1px solid #cbd5e1;
+  background-color: #fffbeb; color: #c3c4c6; border: 2px solid #c3c4c6;
   border-radius: 6px; padding: 4px; font-size: 12px; cursor: pointer;
   width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
   transition: all 0.2s ease;
@@ -392,8 +412,10 @@ const nodeSelectionStyle = computed(() => {
 }
 .add-new-btn {
   background-color: #fffbeb; color: #c3c4c6; border: 2px solid #c3c4c6;
-  border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 500;
+  border-radius: 8px; padding: -1px 8px; font-size: 13px; font-weight: 500;
   cursor: pointer; transition: all 0.2s ease;
+  width: 24px;
+  height: 24px;
 }
 .add-new-btn:hover {
   background-color: #fef9c3; border-color: #eab308;
@@ -405,8 +427,8 @@ const nodeSelectionStyle = computed(() => {
   color: #495057; /* Icon color */
   border: 1.5px solid #c3c4c6; /* Use a slightly thicker border */
   border-radius: 50%; /* Perfect circle */
-  width: 36px; /* Fixed width */
-  height: 36px; /* Fixed height */
+  width: 24px; /* Fixed width */
+  height: 24px; /* Fixed height */
   padding: 0; /* Remove padding to center icon */
   cursor: pointer;
   display: flex;
@@ -415,8 +437,8 @@ const nodeSelectionStyle = computed(() => {
   transition: all 0.2s ease-in-out; /* Transition all properties */
 }
 .send-data-btn:hover:not(:disabled) {
-  background-color: #495057; /* Fill with border color on hover */
-  border-color: #495057;
+  background-color: #fef9c3; /* Fill with border color on hover */
+  border-color: #eab308;
   color: white; /* Icon becomes white */
   transform: scale(1.1); /* A nice pop effect */
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -446,11 +468,25 @@ const nodeSelectionStyle = computed(() => {
 .rationale-item-clone { cursor: grabbing; box-shadow: 0 10px 25px rgba(0,0,0,0.2); transform: scale(1.05); background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 13px; font-family: 'JetBrains Mono', sans-serif; color: #334155; }
 .is-dragging-placeholder { background-color: #f0f9ff; border-color: #bae6fd; border-style: dashed; }
 .is-dragging-placeholder > * { opacity: 0; }
-.is-drop-target { background-color: #dbeafe; border-color: #3b82f6; }
+.is-drop-target { background-color: #dbeafe; border-color: transparent; }
 
-/* Handle Styles (unchanged) */
-:deep(.resizer-handle) { width: 12px; height: 12px; background-color: transparent; border-radius: 2px; border: transparent; }
-:deep(.resizer-line) { border-color: transparent; border-width: 3px; }
-.text-node-container .vue-flow__handle-top, .text-node-container .vue-flow__handle-right, .text-node-container .vue-flow__handle-left { opacity: 0; }
-:deep(.vue-flow__handle) { width: 10px; height: 10px; background-color: transparent; border: transparent; }
+:deep(.vue-flow__handle) {
+  width: 10px;
+  height: 10px;
+  background-color: transparent;
+  border: none; /* Use none instead of transparent for border */
+}
+
+/* Hide the resizer line and handles by default */
+:deep(.vue-flow__node-resizer .vue-flow__handle) {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background-color: transparent;
+  border: none;
+}
+/* This specifically targets the border of the resizer component */
+:deep(.vue-flow__node-resizer) {
+  border-color: transparent;
+}
 </style>

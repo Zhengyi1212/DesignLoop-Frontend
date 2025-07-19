@@ -69,16 +69,17 @@ const getRandomColor = () => {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-
+  background-color: #f8f9fa;
+  border-right: 1px solid #dee2e6;
   padding: 15px;
   width: 100 px;
   border-top: 1px solid #e9ecef;
 }
 
 .panel-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #343a40;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4a5568;
   margin: 0 0 15px 0;
   display: flex;
   align-items: center;

@@ -451,6 +451,11 @@ export default {
                     event.preventDefault();
 
                     if (selectionStart === selectionEnd) {
+                        if (selectionStart >= inputValue.length && this.suffixChar !== null) {
+                            selectionStart = inputValue.length - this.suffixChar.length;
+                            this.$refs.input.$el.setSelectionRange(selectionStart, selectionStart);
+                        }
+
                         const deleteChar = inputValue.charAt(selectionStart - 1);
                         const { decimalCharIndex, decimalCharIndexWithoutPrefix } = this.getDecimalCharIndexes(inputValue);
 
@@ -570,6 +575,10 @@ export default {
             }
         },
         onPaste(event) {
+            if (this.readonly) {
+                return;
+            }
+            
             event.preventDefault();
             let data = (event.clipboardData || window['clipboardData']).getData('Text');
 
@@ -799,7 +808,7 @@ export default {
 
             if (valueStr != null) {
                 newValue = this.parseValue(valueStr);
-                newValue = !newValue && !this.allowEmpty ? this.min || 0 : newValue;
+                newValue = !newValue && !this.allowEmpty ? 0 : newValue;
                 this.updateInput(newValue, insertedValueStr, operation, valueStr);
 
                 this.handleOnInput(event, currentValue, newValue);

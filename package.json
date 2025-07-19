@@ -19,6 +19,8 @@
     "@vue-flow/minimap": "^1.2.0",
     "@vue-flow/node-resizer": "^1.5.0",
     "@vue-flow/node-toolbar": "^1.1.1",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.1",
     "pinia": "^3.0.1",
     "primeicons": "^7.0.0",
     "primevue": "^4.3.5",

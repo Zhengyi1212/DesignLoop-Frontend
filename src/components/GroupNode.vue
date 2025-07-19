@@ -61,7 +61,7 @@ defineProps({
 }
 :deep(.resizer-handle) {
   background-color: transparent;
-  border: 2px solid transparent;
+  border:transparent;
 }
 :deep(.resizer-line) {
   border-color: transparent;

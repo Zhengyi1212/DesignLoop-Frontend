@@ -77,15 +77,6 @@ function openColorPicker() {
         <span>New Node</span>
       </button>
 
-      <button v-if="isShow" class="tool-button" :class="{ active: isAddingRunNode }"
-        @click="handleAddRunNodeClick" title="Click to add a new executable AI Node">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="5 3 19 12 5 21 5 3"></polygon>
-        </svg>
-        <span>AI Node</span>
-      </button>
-
       <button class="tool-button" :class="{ active: isAddGroup }"
         :style="{ backgroundColor: isAddGroup ? activeColor : '', borderColor: isAddGroup ? activeColor : '' }"
         @click="handleGroupClick" title="Click to add a new group base.">
@@ -94,6 +85,17 @@ function openColorPicker() {
           <rect x="3" y="3" width="18" height="18" rx="6" ry="6"></rect>
         </svg>
         <span>New Group</span>
+      </button>
+
+      <div class="divider"></div>
+
+      <button v-if="isShow" class="tool-button" :class="{ active: isAddingRunNode }"
+        @click="handleAddRunNodeClick" title="Click to add a new executable AI Node">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+        <span>AI Node</span>
       </button>
 
     </div>
@@ -112,7 +114,9 @@ function openColorPicker() {
 
 <style scoped>
 .toolbar-container {
-  display: inline-flex;
+  /* Changed from inline-flex and added width */
+  display: flex;
+  width: 100%;
   align-items: center;
   justify-content: space-between;
   padding: 20px 10px;
@@ -129,6 +133,13 @@ function openColorPicker() {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* New style for the divider */
+.divider {
+  width: 1px;
+  height: 24px;
+  background-color: #dee2e6;
 }
 
 .tool-button,

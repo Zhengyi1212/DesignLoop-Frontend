@@ -1,5 +1,6 @@
 <script setup>
-import { ref, onBeforeUnmount, defineAsyncComponent, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
+import { ref, onBeforeUnmount, defineAsyncComponent, onMounted, onUnmounted, computed, watch, nextTick, createApp, h } from 'vue';
+// --- 核心修改: 不再需要导入 SelectionPane ---
 import { VueFlow, useVueFlow, applyEdgeChanges } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
@@ -12,11 +13,18 @@ import SubCanvas from './components/SubCanvas.vue';
 import CanvasNodePanel from './components/CanvasNodePanel.vue';
 import SnapshotDetailModal  from './components/SnapshotDetailModal.vue';
 
+// --- PDF 导出功能第一步：引入所需库 ---
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
-const CustomNode = defineAsyncComponent(() => import('./components/CustomNode.vue'));
-const RunNode = defineAsyncComponent(() => import('./components/RunNode.vue'));
-const GroupNode = defineAsyncComponent(() => import('./components/GroupNode.vue'));
-const RatingNode = defineAsyncComponent(() => import('./components/RatingNode.vue'));
+// 导入所有子画布需要用到的自定义节点，以便离屏渲染，这至关重要
+import ChainNode from './components/ChainNode.vue';
+import TextNode from './components/TextNode.vue';
+// 导入所有自定义组件，以便离屏渲染主画布时使用
+import CustomNode from './components/CustomNode.vue';
+import RunNode from './components/RunNode.vue';
+import GroupNode from './components/GroupNode.vue';
+import RatingNode from './components/RatingNode.vue';
 
 
 // State
@@ -25,7 +33,6 @@ let snapshotIdCounter = 0;
 const pipelineCounter = ref(-1)
 const pipelineOffset = 200;
 
-// --- 核心修改 1: 从解构中移除 onSelectionChange ---
 const { addNodes, addEdges, removeEdges, findNode, removeNodes, project, onPaneMouseMove, getNodes, getSelectedNodes } = useVueFlow();
 
 const nodes = ref([]);
@@ -48,23 +55,206 @@ const isAddingNode = ref(false);
 const isAddingRunNode = ref(false);
 const isAddingGroup = ref(false);
 const isShowingRunNode = ref(true);
+const isExporting = ref(false); // PDF 导出加载状态
 
 const activeColor = ref('#FBF29B');
 
-// --- 核心修改 2: 使用 watch 替代 onSelectionChange ---
-// 监听 getSelectedNodes (一个来自 useVueFlow 的计算属性 ref)
+/**
+ * 捕获并添加子画布到PDF文档中。（此函数保持不变）
+ */
+async function captureAndAddSubCanvasToPdf(pdf, parentNode) {
+  // 1. 创建一个离屏容器
+  const container = document.createElement('div');
+  Object.assign(container.style, {
+    position: 'absolute',
+    left: '-9999px',
+    top: '-9999px',
+    width: '1280px',
+    height: '960px',
+    background: 'white',
+  });
+  document.body.appendChild(container);
+
+  // 2. 创建并配置一个临时的Vue应用实例
+  const app = createApp({
+    render() {
+      return h(VueFlow, {
+          modelValue: [
+            ...JSON.parse(JSON.stringify(parentNode.data.subGraph.nodes)),
+            ...JSON.parse(JSON.stringify(parentNode.data.subGraph.edges)),
+          ],
+          fitViewOnInit: true,
+        },
+        {
+          'node-chain': (props) => h(ChainNode, props),
+          'node-text': (props) => h(TextNode, props),
+          'node-group': (props) => h(GroupNode, props),
+          'node-rating': (props) => h(RatingNode, props),
+          'default': () => h(Background),
+        }
+      );
+    }
+  });
+
+  try {
+    // 3. 挂载Vue应用并等待渲染完成
+    app.mount(container);
+    await nextTick();
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // 4. 执行截图
+    const canvas = await html2canvas(container, {
+      useCORS: true,
+      scale: 2
+    });
+    const imgData = canvas.toDataURL('image/png');
+
+    // 5. 将截图添加到PDF
+    pdf.addPage();
+    pdf.setFontSize(16);
+    pdf.text(`Sub-Canvas of node: '${parentNode.data.title || parentNode.id}'`, 15, 20);
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = canvas.width;
+    const imgHeight = canvas.height;
+    const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+    pdf.addImage(imgData, 'PNG', 15, 30, imgWidth * ratio * 0.9, imgHeight * ratio * 0.9);
+
+  } catch (error) {
+    console.error(`Failed to capture sub-canvas for node ${parentNode.id}:`, error);
+  } finally {
+    // 6. 清理资源
+    if (app) {
+      app.unmount();
+    }
+    document.body.removeChild(container);
+  }
+}
+
+/**
+ * 导出当前画布和所有子画布为一个多页PDF文件。
+ */
+async function exportToPdf() {
+  if (isExporting.value) return;
+  isExporting.value = true;
+
+  let offscreenApp = null;
+  let offscreenContainer = null;
+
+  try {
+    // 1. 初始化 jsPDF 实例
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'pt',
+      format: 'a4'
+    });
+
+    // 2. 导出主画布
+    const mainCanvasElement = vueFlowRef.value?.$el;
+    if (mainCanvasElement) {
+        // 步骤 1: 创建离屏容器
+        offscreenContainer = document.createElement('div');
+        const { width, height } = mainCanvasElement.getBoundingClientRect();
+        Object.assign(offscreenContainer.style, {
+            position: 'absolute',
+            left: '-9999px',
+            top: '-9999px',
+            width: `${width}px`,
+            height: `${height}px`,
+            overflow: 'hidden',
+        });
+        document.body.appendChild(offscreenContainer);
+        
+        // 步骤 2: 创建全新的Vue应用实例进行离屏重绘
+        offscreenApp = createApp({
+            render() {
+                // 步骤 3: 使用 h 函数创建VueFlow VNode
+                return h(VueFlow, {
+                    // 传递主画布的节点和边数据
+                    modelValue: [
+                        ...JSON.parse(JSON.stringify(nodes.value)),
+                        ...JSON.parse(JSON.stringify(edges.value)),
+                    ],
+                    // --- 步骤 4 (最终修正): 自动缩放以适应所有元素 ---
+                    // 使用 fitViewOnInit 确保所有节点和边都被包含在视图内，而不是沿用用户当前的视口。
+                    fitViewOnInit: true,
+                    style: { width: `${width}px`, height: `${height}px` },
+                }, {
+                    // 步骤 5: 注册所有自定义组件插槽
+                    'node-custom': (props) => h(CustomNode, props),
+                    'node-run': (props) => h(RunNode, props),
+                    'node-group': (props) => h(GroupNode, props),
+                    'node-rating': (props) => h(RatingNode, props),
+                    'edge-custom': (props) => h(CustomEdge, props),
+                    'default': () => h(Background),
+                });
+            }
+        });
+
+        // 步骤 6: 挂载并等待渲染
+        offscreenApp.mount(offscreenContainer);
+        await nextTick();
+        await new Promise(resolve => setTimeout(resolve, 500)); 
+
+        // 步骤 7: 截图
+        const canvas = await html2canvas(offscreenContainer, {
+            useCORS: true,
+            scale: 2,
+        });
+        const imgData = canvas.toDataURL('image/png');
+        
+        // 添加图像到PDF
+        pdf.setFontSize(20);
+        pdf.text('Main Design Canvas', 15, 30);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+        pdf.addImage(imgData, 'PNG', 15, 45, imgWidth * ratio * 0.95, imgHeight * ratio * 0.95);
+    }
+
+    // 3. 导出所有子画布
+    for (const node of nodes.value) {
+      if (node.data && node.data.subGraph && node.data.subGraph.nodes && node.data.subGraph.nodes.length > 0) {
+        await captureAndAddSubCanvasToPdf(pdf, node);
+      }
+    }
+
+    // 4. 保存 PDF
+    pdf.save('design-export.pdf');
+
+  } catch (error) {
+    console.error('Failed to export to PDF:', error);
+    alert('An error occurred while exporting to PDF. Please check the console for details.');
+  } finally {
+    // 步骤 8: 彻底清理资源
+    if (offscreenApp) {
+        offscreenApp.unmount();
+    }
+    if (offscreenContainer) {
+        document.body.removeChild(offscreenContainer);
+    }
+    isExporting.value = false;
+  }
+}
+
+
+// Watch for selection changes to update the color picker
 watch(getSelectedNodes, (selectedNodes) => {
-  // 当只选中一个节点时，更新颜色选择器
+  // When only one node is selected, update the color picker to match its color
   if (selectedNodes.length === 1 && selectedNodes[0].data && selectedNodes[0].data.color) {
     activeColor.value = selectedNodes[0].data.color;
   }
 });
 
-// 监听 activeColor 的变化，并将其应用到选中的节点上
+// Watch for color changes and apply them to selected nodes
 watch(activeColor, (newColor) => {
   const selectedNodes = getSelectedNodes.value;
   selectedNodes.forEach(node => {
-    if (node.data) {
+    // IMPORTANT: Only apply color changes to nodes of type 'custom' or 'group'
+    // This prevents changing the color of 'RunNode' or other special nodes.
+    if (node.data && (node.type === 'custom' || node.type === 'group')) {
       node.data.color = newColor;
     }
   });
@@ -747,7 +937,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app-container" :class="{ 'is-resizing': isResizing }">
-    <!-- Left Panel -->
     <InstructionPanel
       :panels="instructionPanels"
       :is-generating="isGenerating"
@@ -757,11 +946,16 @@ onBeforeUnmount(() => {
       @fetch-pipeline="handleFetchPipeline"
     />
 
-    <!-- Main Content Area -->
     <main class="main-content">
-      <button @click="clearAllStateAndExit" class="exit-button" title="清除所有内容并退出">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-      </button>
+      <div class="top-right-actions">
+        <button @click="exportToPdf" class="action-button pdf-export-button" title="Export to PDF" :disabled="isExporting">
+          <svg v-if="!isExporting" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <div v-else class="spinner"></div>
+        </button>
+        <button @click="clearAllStateAndExit" class="action-button exit-button" title="清除所有内容并退出">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
 
       <VueFlow
         v-model:nodes="nodes"
@@ -772,6 +966,8 @@ onBeforeUnmount(() => {
         :fit-view-on-init="true"
         ref="vueFlowRef"
         :min-zoom="0.1"
+        selection-mode="full"
+        :selection-key-code="'Shift'"
       >
         <template #node-rating="props">
           <RatingNode
@@ -843,7 +1039,6 @@ onBeforeUnmount(() => {
     />
     </main>
 
-    <!-- Right Panel -->
     <div
       class="right-panel"
       :style="{ width: rightPanelWidth + 'px' }"
@@ -882,6 +1077,9 @@ onBeforeUnmount(() => {
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/controls@latest/dist/style.css';
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/minimap@latest/dist/style.css';
 @import '@vue-flow/node-resizer/dist/style.css';
+/* 框选功能的样式依然需要导入 */
+@import 'https://cdn.jsdelivr.net/npm/@vue-flow/core@1.45.0/dist/selection-pane.css';
+
 
 :root {
   --app-bg: #f3f4f6;
@@ -984,11 +1182,16 @@ body, html {
   transform: translate(-50%, -50%) scale(1.1);
   box-shadow: 0 6px 16px rgba(0, 123, 255, 0.5);
 }
-.exit-button {
+
+.top-right-actions {
   position: absolute;
   top: 15px;
   right: 15px;
   z-index: 20;
+  display: flex;
+  gap: 10px;
+}
+.action-button {
   background-color: #f8f9fa;
   border: 1px solid #dee2e6;
   border-radius: 50%;
@@ -1001,12 +1204,37 @@ body, html {
   color: #343a40;
   transition: all 0.3s ease-in-out;
 }
+.action-button:hover:not(:disabled) {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+    transform: scale(1.1);
+}
+.action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
 .exit-button:hover {
   background-color: #e74c3c;
   color: white;
   border-color: #e74c3c;
   transform: rotate(90deg) scale(1.1);
 }
+.spinner {
+    border: 3px solid rgba(0, 0, 0, 0.2);
+    border-left-color: #343a40;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    animation: spin 1s linear infinite;
+}
+.pdf-export-button:hover:not(:disabled) .spinner {
+    border-left-color: white;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .session-expired-overlay {
   position: fixed;
   top: 0;
@@ -1048,5 +1276,10 @@ body, html {
 .restart-button:hover {
   background-color: #2ecc71;
   transform: translateY(-2px);
+}
+/* Optional: Style the selection pane for better visibility */
+.vue-flow__selectionpane {
+  background: rgba(0, 102, 255, 0.08);
+  border: 1px dotted rgba(0, 102, 255, 0.8);
 }
 </style>

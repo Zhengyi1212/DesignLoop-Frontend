@@ -716,6 +716,8 @@ export default {
                         this.updateModel(event, [...(this.d_value || []), event.target.value.trim()]);
                         this.$refs.focusInput.value = '';
                     }
+
+                    event.preventDefault();
                 }
             } else {
                 if (!this.overlayVisible) {
@@ -736,7 +738,7 @@ export default {
             }
         },
         onSpaceKey(event) {
-            if (this.focusedOptionIndex !== -1) {
+            if (!this.autoOptionFocus && this.focusedOptionIndex !== -1) {
                 this.onEnterKey(event);
             }
         },

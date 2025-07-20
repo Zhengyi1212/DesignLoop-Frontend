@@ -132,7 +132,8 @@ async function captureAndAddSubCanvasToPdf(pdf, parentNode) {
 }
 
 /**
- * 导出当前画布和所有子画布为一个多页PDF文件。
+ * Exports the main canvas and all sub-canvases to a multi-page PDF.
+ * This function has been corrected to fix the edge clipping bug.
  */
 async function exportToPdf() {
   if (isExporting.value) return;
@@ -142,98 +143,147 @@ async function exportToPdf() {
   let offscreenContainer = null;
 
   try {
-    // 1. 初始化 jsPDF 实例
     const pdf = new jsPDF({
       orientation: 'landscape',
       unit: 'pt',
       format: 'a4'
     });
 
-    // 2. 导出主画布
     const mainCanvasElement = vueFlowRef.value?.$el;
-    if (mainCanvasElement) {
-        // 步骤 1: 创建离屏容器
-        offscreenContainer = document.createElement('div');
-        const { width, height } = mainCanvasElement.getBoundingClientRect();
-        Object.assign(offscreenContainer.style, {
-            position: 'absolute',
-            left: '-9999px',
-            top: '-9999px',
-            width: `${width}px`,
-            height: `${height}px`,
-            overflow: 'hidden',
-        });
-        document.body.appendChild(offscreenContainer);
-        
-        // 步骤 2: 创建全新的Vue应用实例进行离屏重绘
-        offscreenApp = createApp({
-            render() {
-                // 步骤 3: 使用 h 函数创建VueFlow VNode
-                return h(VueFlow, {
-                    // 传递主画布的节点和边数据
-                    modelValue: [
-                        ...JSON.parse(JSON.stringify(nodes.value)),
-                        ...JSON.parse(JSON.stringify(edges.value)),
-                    ],
-                    // --- 步骤 4 (最终修正): 自动缩放以适应所有元素 ---
-                    // 使用 fitViewOnInit 确保所有节点和边都被包含在视图内，而不是沿用用户当前的视口。
-                    fitViewOnInit: true,
-                    style: { width: `${width}px`, height: `${height}px` },
-                }, {
-                    // 步骤 5: 注册所有自定义组件插槽
-                    'node-custom': (props) => h(CustomNode, props),
-                    'node-run': (props) => h(RunNode, props),
-                    'node-group': (props) => h(GroupNode, props),
-                    'node-rating': (props) => h(RatingNode, props),
-                    'edge-custom': (props) => h(CustomEdge, props),
-                    'default': () => h(Background),
-                });
-            }
-        });
+    if (mainCanvasElement && nodes.value.length > 0) {
+      // Step 1: Precisely calculate the bounding box of all nodes.
+      // This is the crucial first step to fixing the problem. We need to know the exact
+      // extent of all content.
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const PADDING = 100; // Add padding around the content to ensure edges aren't clipped.
 
-        // 步骤 6: 挂载并等待渲染
-        offscreenApp.mount(offscreenContainer);
-        await nextTick();
-        await new Promise(resolve => setTimeout(resolve, 500)); 
+      nodes.value.forEach(node => {
+        // For the most accurate calculation, we prioritize the node's actual rendered dimensions.
+        const renderedNode = findNode(node.id);
+        const width = renderedNode?.dimensions?.width || node.width || 200; // Fallback width
+        const height = renderedNode?.dimensions?.height || node.height || 150; // Fallback height
 
-        // 步骤 7: 截图
-        const canvas = await html2canvas(offscreenContainer, {
-            useCORS: true,
-            scale: 2,
-        });
-        const imgData = canvas.toDataURL('image/png');
-        
-        // 添加图像到PDF
-        pdf.setFontSize(20);
-        pdf.text('Main Design Canvas', 15, 30);
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const imgWidth = canvas.width;
-        const imgHeight = canvas.height;
-        const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-        pdf.addImage(imgData, 'PNG', 15, 45, imgWidth * ratio * 0.95, imgHeight * ratio * 0.95);
+        minX = Math.min(minX, node.position.x);
+        minY = Math.min(minY, node.position.y);
+        maxX = Math.max(maxX, node.position.x + width);
+        maxY = Math.max(maxY, node.position.y + height);
+      });
+
+      const contentWidth = maxX - minX;
+      const contentHeight = maxY - minY;
+
+      // Create a bounds object containing all content, to be used by `fitBounds`.
+      const bounds = {
+        x: minX,
+        y: minY,
+        width: contentWidth,
+        height: contentHeight,
+      };
+
+      // Step 2: Create an off-screen container that is proportional to the content.
+      // We no longer use the on-screen viewport's dimensions. Instead, we create a
+      // container based on the content's actual aspect ratio to ensure the final
+      // screenshot is not distorted.
+      offscreenContainer = document.createElement('div');
+      // To ensure high quality, we set a large base width for rendering and calculate
+      // the height proportionally. We add padding to the bounds for the final dimensions.
+      const exportWidth = Math.max(1920, bounds.width + PADDING * 2);
+      const exportHeight = (exportWidth / (bounds.width + PADDING * 2)) * (bounds.height + PADDING * 2);
+
+      Object.assign(offscreenContainer.style, {
+        position: 'absolute',
+        left: '-9999px',
+        top: '-9999px',
+        width: `${exportWidth}px`,
+        height: `${exportHeight}px`,
+      });
+      document.body.appendChild(offscreenContainer);
+
+      // Step 3: Create a new Vue app instance for off-screen rendering.
+      offscreenApp = createApp({
+        render() {
+          return h(VueFlow, {
+            modelValue: [
+              ...JSON.parse(JSON.stringify(nodes.value)),
+              ...JSON.parse(JSON.stringify(edges.value)),
+            ],
+            // --- THE CORE FIX ---
+            // We no longer use `fitViewOnInit` as it can cause unpredictable panning.
+            // Instead, we use `fitBounds`, telling VueFlow exactly which area to render.
+            // VueFlow will automatically calculate the correct zoom and pan to make
+            // this `bounds` rectangle fit perfectly within the viewport of the size
+            // we provide in `style`, thus preventing any content from being moved
+            // outside the capturable area.
+            fitBounds: bounds,
+            fitBoundsOptions: { padding: PADDING },
+            style: { width: `${exportWidth}px`, height: `${exportHeight}px` },
+          }, {
+            // Register all custom component slots
+            'node-custom': (props) => h(CustomNode, props),
+            'node-run': (props) => h(RunNode, props),
+            'node-group': (props) => h(GroupNode, props),
+            'node-rating': (props) => h(RatingNode, props),
+            'edge-custom': (props) => h(CustomEdge, props),
+            'default': () => h(Background),
+          });
+        }
+      });
+
+      // Step 4: Mount, wait for render, and take the screenshot.
+      offscreenApp.mount(offscreenContainer);
+      await nextTick();
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const canvas = await html2canvas(offscreenContainer, {
+        useCORS: true,
+        scale: 2,
+      });
+      const imgData = canvas.toDataURL('image/png');
+
+      // Add the image to the PDF (this part of the logic is unchanged).
+      pdf.setFontSize(20);
+      pdf.text('Main Design Canvas', 15, 30);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      pdf.addImage(imgData, 'PNG', 15, 45, imgWidth * ratio * 0.95, imgHeight * ratio * 0.95);
+
+    } else if (mainCanvasElement) {
+      // Handle the case where the canvas exists but is empty.
+      const canvas = await html2canvas(mainCanvasElement, { useCORS: true, scale: 2 });
+      const imgData = canvas.toDataURL('image/png');
+      pdf.setFontSize(20);
+      pdf.text('Main Design Canvas (Empty)', 15, 30);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      pdf.addImage(imgData, 'PNG', 15, 45, imgWidth * ratio * 0.95, imgHeight * ratio * 0.95);
     }
 
-    // 3. 导出所有子画布
+    // 3. Export all sub-canvases
     for (const node of nodes.value) {
       if (node.data && node.data.subGraph && node.data.subGraph.nodes && node.data.subGraph.nodes.length > 0) {
         await captureAndAddSubCanvasToPdf(pdf, node);
       }
     }
 
-    // 4. 保存 PDF
+    // 4. Save the PDF
     pdf.save('design-export.pdf');
 
   } catch (error) {
     console.error('Failed to export to PDF:', error);
     alert('An error occurred while exporting to PDF. Please check the console for details.');
   } finally {
-    // 步骤 8: 彻底清理资源
+    // 5. Clean up resources thoroughly
     if (offscreenApp) {
-        offscreenApp.unmount();
+      offscreenApp.unmount();
     }
     if (offscreenContainer) {
-        document.body.removeChild(offscreenContainer);
+      document.body.removeChild(offscreenContainer);
     }
     isExporting.value = false;
   }
@@ -1076,7 +1126,7 @@ onBeforeUnmount(() => {
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/core@1.45.0/dist/theme-default.css';
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/controls@latest/dist/style.css';
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/minimap@latest/dist/style.css';
-@import '@vue-flow/node-resizer/dist/style.css';
+/*@import '@vue-flow/node-resizer/dist/style.css';*/
 /* 框选功能的样式依然需要导入 */
 @import 'https://cdn.jsdelivr.net/npm/@vue-flow/core@1.45.0/dist/selection-pane.css';
 
@@ -1282,4 +1332,37 @@ body, html {
   background: rgba(0, 102, 255, 0.08);
   border: 1px dotted rgba(0, 102, 255, 0.8);
 }
+.vue-flow__resize-control {
+  /* 核心修复：让控制器脱离文档流，不再占据空间 */
+  position: absolute !important; 
+  width: 16px;    /* 控制器的大小 */
+  height: 16px;
+  background: transparent; /* 将背景设置为透明 */
+  border: none;  /* 控制器的边框色 */
+  border-radius: 2px;
+  z-index: 10;      /* 确保它显示在节点内容之上 */
+}
+
+/* 2. 分别定位四个角的控制器 */
+.vue-flow__resize-control.top.left {
+  top: -5px;
+  left: -5px;
+  cursor: nwse-resize;
+}
+.vue-flow__resize-control.top.right {
+  top: -5px;
+  right: -5px;
+  cursor: nesw-resize;
+}
+.vue-flow__resize-control.bottom.right {
+  bottom: -5px;
+  right: -5px;
+  cursor: nwse-resize;
+}
+.vue-flow__resize-control.bottom.left {
+  bottom: -5px;
+  left: -5px;
+  cursor: nesw-resize;
+}
+
 </style>

@@ -144,9 +144,9 @@ function onShowRating() {
     <div class="node-footer">
         <!-- 新增的评价按钮 -->
         <button v-if="!isRunning && !isEditingContent" class="rating-btn" @click.stop="onShowRating" title="Rate this result">
-            Click
+            <img src="@/assets/Group.svg" alt="Click">
           </button>
-          <p class="text">to rate response</p>
+          <p class="text">Click to rate response</p>
         <!-- 原有的运行按钮/加载动画 -->
         <button v-if="!isRunning && !isEditingContent" class="run-btn" @click.stop="onRun" title="Run this node">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
@@ -265,7 +265,7 @@ function onShowRating() {
             transform: scale(1.05);    /* 添加轻微的放大效果 */
         }
 .text {
-  font-size: 9px;
+  font-size: 7px;
   color: #878787;
 }
 .run-btn {

@@ -522,9 +522,12 @@ function onOpenCanvas() {
   width: 8px; height: 8px; 
   background-color: transparent; border-radius: 2px; border: 2px solid transparent; }
 :deep(.resizer-line) { border-color: transparent; border-width: 2px; }
-:deep(.vue-flow__handle) {
-  position: absolute;
-   width: 12px; height: 11px; background-color: #9e9e9e; border: 1px solid #f0f0f0; }
+.custom-node :deep(.vue-flow__handle) {
+  width: 12px;
+  height: 11px;
+  background-color: #9e9e9e;
+  border: 1px solid #f0f0f0;
+}
 :deep(.vue-flow__handle:hover) { background-color: #007bff; }
 .custom-node .vue-flow__handle-top,
 .custom-node .vue-flow__handle-bottom { display: none !important;opacity: 0; }

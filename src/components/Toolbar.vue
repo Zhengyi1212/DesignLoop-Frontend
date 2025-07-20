@@ -69,24 +69,24 @@ function openColorPicker() {
       </button>
       <button class="tool-button" :class="{ active: isAddingNode }"
         :style="{ backgroundColor: isAddingNode ? activeColor : '', borderColor: isAddingNode ? activeColor : '' }"
-        @click="handleAddNodeClick" title="Click to add a new customizable node.">
-        <img src="@/assets/custom.svg" alt="Click">
-        <span>New Node</span>
+        @click="handleAddNodeClick" title="Click to add a node">
+        <img src="@/assets/custom.svg" alt="Click to add a node" height="23px" width="23px">
+        
       </button>
 
-      <button class="tool-button" :class="{ active: isAddGroup }"
+      <button class="tool-button section-a" :class="{ active: isAddGroup }"
         :style="{ backgroundColor: isAddGroup ? activeColor : '', borderColor: isAddGroup ? activeColor : '' }"
-        @click="handleGroupClick" title="Click to add a new group base.">
-        <img src="@/assets/gp.svg" alt="Click">
-        <span>New Group</span>
+        @click="handleGroupClick" title="Click to add a new section">
+        <img src="@/assets/gp.svg" alt="Click to add a section" height="23px" width="23px">
+        
       </button>
 
       <div class="divider"></div>
 
       <button v-if="isShow" class="tool-button" :class="{ active: isAddingRunNode }"
-        @click="handleAddRunNodeClick" title="Click to add a new executable AI Node">
-        <img src="@/assets/ai.svg" alt="Click">
-        <span>AI Node</span>
+        @click="handleAddRunNodeClick" title="Click to add a AI Node">
+        <img src="@/assets/ai.svg" lt="Click to add a AI node" height="23px" width="23px">
+       
       </button>
 
     </div>
@@ -106,8 +106,9 @@ function openColorPicker() {
 <style scoped>
 .toolbar-container {
   /* Changed from inline-flex and added width */
+
   display: flex;
-  width: 100%;
+  width: 92%;
   align-items: center;
   justify-content: space-between;
   padding: 20px 10px;
@@ -205,5 +206,19 @@ function openColorPicker() {
   height: 100%;
   opacity: 0;
   cursor: pointer;
+}
+.section-a {display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: transparent;
+  background-color: transparent;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: Arial;
+  font-size: 13px;
+  color: #343a40;
+  height: 32px;
 }
 </style>

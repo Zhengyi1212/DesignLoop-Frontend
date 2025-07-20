@@ -241,8 +241,8 @@ function onShowRating() {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 30px;  /* 调整了尺寸以获得更好的视觉效果 */
-            height: 20px;
+            width: 20px;  /* 调整了尺寸以获得更好的视觉效果 */
+            height: 15px;
             padding: 0;
             border: transparent; /* 添加了匹配的深红色边框 */
             

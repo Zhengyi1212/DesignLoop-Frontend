@@ -70,20 +70,14 @@ function openColorPicker() {
       <button class="tool-button" :class="{ active: isAddingNode }"
         :style="{ backgroundColor: isAddingNode ? activeColor : '', borderColor: isAddingNode ? activeColor : '' }"
         @click="handleAddNodeClick" title="Click to add a new customizable node.">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-        </svg>
+        <img src="@/assets/custom.svg" alt="Click">
         <span>New Node</span>
       </button>
 
       <button class="tool-button" :class="{ active: isAddGroup }"
         :style="{ backgroundColor: isAddGroup ? activeColor : '', borderColor: isAddGroup ? activeColor : '' }"
         @click="handleGroupClick" title="Click to add a new group base.">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="6" ry="6"></rect>
-        </svg>
+        <img src="@/assets/gp.svg" alt="Click">
         <span>New Group</span>
       </button>
 
@@ -91,10 +85,7 @@ function openColorPicker() {
 
       <button v-if="isShow" class="tool-button" :class="{ active: isAddingRunNode }"
         @click="handleAddRunNodeClick" title="Click to add a new executable AI Node">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="5 3 19 12 5 21 5 3"></polygon>
-        </svg>
+        <img src="@/assets/ai.svg" alt="Click">
         <span>AI Node</span>
       </button>
 
@@ -156,6 +147,7 @@ function openColorPicker() {
   font-family: Arial;
   font-size: 13px;
   color: #343a40;
+  height: 32px;
 }
 
 .toolbar-container .tool-section .tool-button-rate {

@@ -397,7 +397,7 @@ async function handleRatingSubmit(payload) {
   const runNodeContent = payload.context.content;
   const ratings = payload.ratings
   try {
-    const response = await fetch("/api/submit-rating", {
+    const response = await fetch("http://localhost:7001/submit-rating", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -559,9 +559,9 @@ function placeNodeOnClick(event) {
     if (isAddingGroup.value) {
         newNode = { ...newNode, type: 'group', zIndex: 0, width: 400, height: 300, data: { ...newNode.data, label: 'My Group' } };
     } else if (isAddingRunNode.value) {
-        newNode = { ...newNode, type: 'run', zIndex: 1, data: { ...newNode.data, title: 'Edit instruction...', content: 'Ready to run...', instruction: '', goal: '', connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] }, color: '#f1c40f' } };
+        newNode = { ...newNode, type: 'run', zIndex: 1, width: 200, height: 180,data: { ...newNode.data, title: 'Edit instruction...', content: 'Ready to run...', instruction: '', goal: '', connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] }, color: '#f1c40f' } };
     } else {
-        newNode = { ...newNode, type: 'custom', zIndex: 1, data: { ...newNode.data, title: 'New Node', content: 'Click to edit...', instruction: '', goal: '', connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] } } };
+        newNode = { ...newNode, type: 'custom', zIndex: 1, width: 200, height: 180,data: { ...newNode.data, title: 'New Node', content: 'Click to edit...', instruction: '', goal: '', connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] } } };
     }
     addNodes(newNode);
     nextTick(() => { setAddMode(null); });
@@ -999,7 +999,9 @@ onBeforeUnmount(() => {
     <main class="main-content">
       <div class="top-right-actions">
         <button @click="exportToPdf" class="action-button pdf-export-button" title="Export to PDF" :disabled="isExporting">
-          <svg v-if="!isExporting" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <img v-if="!isExporting" src="@/assets/export.svg" lt="Click to export to PDF" height="20px" width="20px">
+       
+
           <div v-else class="spinner"></div>
         </button>
         <button @click="clearAllStateAndExit" class="action-button exit-button" title="清除所有内容并退出">

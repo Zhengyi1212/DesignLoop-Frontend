@@ -63,25 +63,25 @@ function openColorPicker() {
 <template>
   <div class="toolbar-container">
     <div class="tool-section">
-      <button class="tool-button color-picker-btn" @click="openColorPicker" title="Select color for new or selected nodes">
+      <button v-if="isShow" class="tool-button color-picker-btn" @click="openColorPicker" title="Select color for new or selected nodes">
         <div class="color-swatch" :style="{ backgroundColor: activeColor }"></div>
         <input type="color" ref="colorPicker" :value="activeColor" @input="onColorChange" class="hidden-color-input" />
       </button>
       <button class="tool-button" :class="{ active: isAddingNode }"
         :style="{ backgroundColor: isAddingNode ? activeColor : '', borderColor: isAddingNode ? activeColor : '' }"
         @click="handleAddNodeClick" title="Click to add a node">
-        <img src="@/assets/custom.svg" alt="Click to add a node" height="23px" width="23px">
+        <img src="@/assets/custom.svg" alt="Click to add a node" height="21px" width="21px">
         
       </button>
 
-      <button class="tool-button section-a" :class="{ active: isAddGroup }"
+      <button v-if="isShow" class="tool-button section-a" :class="{ active: isAddGroup }"
         :style="{ backgroundColor: isAddGroup ? activeColor : '', borderColor: isAddGroup ? activeColor : '' }"
         @click="handleGroupClick" title="Click to add a new section">
-        <img src="@/assets/gp.svg" alt="Click to add a section" height="23px" width="23px">
+        <img src="@/assets/gp.svg" alt="Click to add a section" height="21px" width="21px">
         
       </button>
 
-      <div class="divider"></div>
+      <div v-if="isShow"class="divider"></div>
 
       <button v-if="isShow" class="tool-button" :class="{ active: isAddingRunNode }"
         @click="handleAddRunNodeClick" title="Click to add a AI Node">
@@ -111,7 +111,7 @@ function openColorPicker() {
   width: 92%;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 10px;
+  padding: 15px 15px;
   gap: 16px;
   height: 55px;
   border-radius: 18px;

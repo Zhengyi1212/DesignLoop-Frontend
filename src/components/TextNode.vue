@@ -99,7 +99,7 @@ function adjustItemHeight(textElement) {
   if (!itemElement) return;
   textElement.style.height = 'auto';
   const minHeight = 80;
-  const requiredHeight = textElement.scrollHeight + 60;
+  const requiredHeight = textElement.scrollHeight;
   itemElement.style.height = `${Math.max(minHeight, requiredHeight)}px`;
 }
 const adjustAllItemsHeight = () => {
@@ -362,14 +362,14 @@ function updateRationaleText(event, index) {
   position: absolute;
   bottom: 8px;
   left: 28px;   /* Position the container from the left */
-  right: 8px;  /* Position the container from the right */
+  right: 8px; 
   opacity: 0;
   transition: opacity 0.2s ease-in-out;
 
  display: flex;
   justify-content: flex-end; /* 将所有项目对齐到容器的末尾（右侧） */
   align-items: center;
-  gap: 8px; /* 在按钮之间创建一个8px的间距，非常方便 */
+  gap: 8px; 
 }
 
 .delete-btn {
@@ -451,18 +451,21 @@ function updateRationaleText(event, index) {
 }
 
 .spinner {
-  border: 2px solid rgba(0, 0, 0, 0.2);
+  border: 3px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
-  border-top-color: #333;
+  border-top-color: #fff;
   width: 16px;
-  height: 16px;
+  height: 14px;
   animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 /* Spinner inside disabled button */
 .send-data-btn:disabled .spinner {
     border-top-color: #adb5bd;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Drag & Drop Styles (unchanged) */
 .rationale-item-clone { cursor: grabbing; box-shadow: 0 10px 25px rgba(0,0,0,0.2); transform: scale(1.05); background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 13px; font-family: 'JetBrains Mono', sans-serif; color: #334155; }

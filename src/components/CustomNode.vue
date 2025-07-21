@@ -346,6 +346,8 @@ function onOpenCanvas() {
 }
 
 .node-header {
+ 
+  border: 1px solid #b7c0ce;
   color: white;
   padding: 8px 12px;
   border-top-left-radius: 7px;
@@ -359,6 +361,7 @@ function onOpenCanvas() {
 }
 
 .title-container {
+  color:  #334155;
   flex-grow: 1;
   min-width: 0; /* 确保在 flex 布局中可以被压缩 */
 }
@@ -372,8 +375,9 @@ function onOpenCanvas() {
 }
 
 .title-input {
+  
   background-color: transparent;
-  color: white;
+  color: #334155;
   border: none;
   outline: none;
   font-family: 'JetBrains Mono', sans-serif;

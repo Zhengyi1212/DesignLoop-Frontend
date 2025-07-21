@@ -140,23 +140,19 @@ function onShowRating() {
       ></textarea>
     </div>
 
-    <!-- 3. 修改 node-footer 结构 -->
-    <div class="node-footer">
-        <!-- 新增的评价按钮 -->
+    
+
+<div class="node-footer">
+    <div class="rating-group">
         <button v-if="!isRunning && !isEditingContent" class="rating-btn" @click.stop="onShowRating" title="Rate this result">
-            <img src="@/assets/Group.svg" alt="Click">
-          </button>
-          <p class="text">Click to rate response</p>
-        <!-- 原有的运行按钮/加载动画 -->
-        <button v-if="!isRunning && !isEditingContent" class="run-btn" @click.stop="onRun" title="Run this node">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
-            </svg>
-            <span>Run</span>
+            <img src="@/assets/Group.svg" alt="Click" height="18px" width="18px">
         </button>
-        <div v-else-if="isRunning" class="spinner-container">
-            <div class="spinner"></div>
-        </div>
+        <p class="text">Click to rate response</p>
+    </div>
+
+    <button v-if="!isRunning && !isEditingContent" class="run-btn" @click.stop="onRun" title="Run this node">
+        <img src="@/assets/Run.svg" alt="Click to add a node" height="26px" width="26px">
+    </button>
     </div>
   </div>
 </template>
@@ -211,6 +207,12 @@ function onShowRating() {
   overflow-y: auto;
   cursor: text;
 }
+/* 添加到你的 <style> 块中 */
+.rating-group {
+  display: flex;
+  align-items: center;
+  gap: 1px; /* 在按钮和文字之间增加一点间距 */
+}
 .content-display {
   margin: 0;
   white-space: pre-wrap;
@@ -241,9 +243,9 @@ function onShowRating() {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 20px;  /* 调整了尺寸以获得更好的视觉效果 */
-            height: 15px;
-            padding: 0;
+            width: 28px;  /* 调整了尺寸以获得更好的视觉效果 */
+            height: 24px;
+            padding: 0 0px;
             border: transparent; /* 添加了匹配的深红色边框 */
             
             /* --- 修改的核心部分 --- */
@@ -254,8 +256,7 @@ function onShowRating() {
             border-radius: 2px; /* 调整了圆角使其更柔和 */
             cursor: pointer;
             transition: all 0.2s ease-in-out;
-            font-size: 12px; /* 调整了字体大小以适应按钮 */
-            font-weight: bold;
+       
         }
 
         /* 鼠标悬停时的效果 */
@@ -265,17 +266,34 @@ function onShowRating() {
             transform: scale(1.05);    /* 添加轻微的放大效果 */
         }
 .text {
-  font-size: 7px;
+  padding-left: 0%;
+  font-size: 10px;
   color: #878787;
 }
 .run-btn {
-    display: flex; align-items: right; gap: 0px; padding: 0px 6px;
-    border: 1px solid #e67e22; background-color: #f39c12; color: white;
-    border-radius: 8px; cursor: pointer; transition: all 0.2s ease;
-    font-family: 'JetBrains Mono', monospace; font-size: 14px;
+  /* --- FIXES --- */
+  display: flex;
+  align-items: center;      /* Correct value for vertical centering */
+  justify-content: center;  /* Add this for horizontal centering */
+  padding: 0;               /* Remove horizontal padding */
+
+  /* --- YOUR ORIGINAL STYLES (MOSTLY UNCHANGED) --- */
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: #495057;
+  background-color: transparent;
+  border: transparent;
+  border-radius: 50%; /* Perfect circle */
+  box-sizing: border-box; /* Good practice with borders and padding */
 }
+
 .run-btn:hover {
-    background-color: #e67e22; border-color: #d35400;
+  background-color: #f5f3f3;;
+
 }
 .spinner-container {
     display: flex; justify-content: flex-end; align-items: center; width: 100%;

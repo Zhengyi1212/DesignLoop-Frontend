@@ -68,7 +68,7 @@ async function handleRatingSubmit(payload) {
   console.log('Submitting SubCanvas rating to backend:', payload);
 
   try {
-    const response = await fetch("/api/submit-rating-subcanvas", {
+    const response = await fetch("http:localhost:7001/submit-rating-subcanvas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -510,6 +510,7 @@ function findDirectPredecessorsWithText(startNodeId, allNodes, allEdges) {
     if (directPredecessors.length === 0) return [];
     const results = directPredecessors.map(predNode => {
         let foundTextNodeContent = '';
+        let foundTextNodeTitle = '';
         for (const edge of allEdges) {
             let connectedNodeId = null;
             if (edge.source === predNode.id) connectedNodeId = edge.target;
@@ -517,12 +518,13 @@ function findDirectPredecessorsWithText(startNodeId, allNodes, allEdges) {
             if (connectedNodeId && connectedNodeId !== startNodeId) {
                 const connectedNode = allNodes.find(n => n.id === connectedNodeId);
                 if (connectedNode && connectedNode.type === 'text') {
-                    foundTextNodeContent = `[Rationale List with ${connectedNode.data.rationales?.length || 0} items]`;
+                    foundTextNodeContent = connectedNode.data.rationales;
+                    foundTextNodeTitle = connectedNode.data.title;
                     break;
                 }
             }
         }
-        return { node_content: predNode.data.content, text_content: foundTextNodeContent };
+        return { node_content: predNode.data.content, text_content: foundTextNodeContent ,text_title: foundTextNodeTitle };
     });
     return results;
 }
@@ -546,7 +548,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             design_background: props.designBackground,
             design_goal: props.designGoal
         };
-
+        console.log("Pre:", predecessors)
         const response = await fetch('http://localhost:7001/generate-rationale', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -584,7 +586,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             const lineCount = Math.ceil((text.length || 1) / avgCharsPerLine);
             totalContentHeight += (lineCount * lineHeight) + itemPaddingY + itemGapY;
         });
-        const calculatedHeight = headerHeight + totalContentHeight;
+        const calculatedHeight = headerHeight + totalContentHeight + 100;
         const finalHeight = Math.min(Math.max(calculatedHeight, 150), 600);
 
         const existingTextNodeId = sourceNode.data.generatedRationaleNodeId;
@@ -600,8 +602,8 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
         } else {
             const newTextNode = {
                 id: `sub-text-node-${props.nodeId}-${subNodeIdCounter.value++}`, type: 'text',
-                position: { x: position.x, y: position.y + TEXT_NODE_OFFSET_Y },
-                width: 250, height: finalHeight, 
+                position: { x: position.x, y: position.y-400 + TEXT_NODE_OFFSET_Y },
+                width: 420, height: finalHeight+100, 
                 
                 data: { rationales: rationaleList,
                   parent_content : sourceNode.data.content,
@@ -645,7 +647,7 @@ async function handleSubCanvasRun() {
         if (edgesToRemove.length > 0) subflow.removeEdges(edgesToRemove.map(e => e.id));
         subflow.removeNodes(nodeIdsToRemove);
     }
-    const url = "/api/generate-thinking-chain";
+    const url = "http://localhost:7001/generate-thinking-chain";
     const payload = {
       design_background: props.designBackground, design_goal: props.designGoal,
       parent_node_content: props.parentNodeContent, parent_node_title : props.parentNodeTitle,
@@ -725,17 +727,16 @@ onUnmounted(() => {
           </div>
           <div class="field">
             <label for="instruction">Instruction</label>
-            <textarea id="instruction" v-model="instruction" @blur="onFieldBlur" :placeholder="'描述推理应如何展开，如线性推理、替代推理、特定视角推理或分支推理'" rows="3"></textarea>
+            <textarea id="instruction" v-model="instruction" @blur="onFieldBlur" :placeholder="'描述你希望的LLM思考或推理如何进行，例如头脑风暴、更多可能性、转变性视角、对比等等'" rows="3"></textarea>
           </div>
         </div>
 
         <div class="run-button-wrapper">
           <button ref="runBtnRef" class="run-btn" @click="handleSubCanvasRun" :disabled="isSubCanvasRunning" title="Run Sub-Canvas Logic">
+            
             <div v-if="isSubCanvasRunning" class="spinner"></div>
-            <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-              <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" />
-            </svg>
-            <span>Generate</span>
+            <span v-else>Generate</span>
+            
           </button>
         </div>
       </div>
@@ -788,12 +789,12 @@ onUnmounted(() => {
           <Controls />
         </VueFlow>
       </div>
-      <div class="sub-canvas-toolbar-wrapper">
+      <div class="subcanvas-toolbar-container">
         <Toolbar
         :is-add-group="isAddingGroup"
         :is-adding-node="isAddingNode"
         :is-show="isShowingRunNode"
-        v-model:newNodeColor="newNodeColor"
+        v-model:activeColor="newNodeColor"
          @toggle-add-group-mode="toggleAddGroupMode"
          @toggle-add-node-mode="toggleAddNodeMode"
          :show-rate-button="true"
@@ -807,7 +808,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* Styles are unchanged, so they are omitted for brevity. You can copy them from your original file. */
+/* 这里是 SubCanvas.vue 中所有的原有样式，保持不变 */
 .sub-canvas-overlay {
   position: fixed;
   top: 0;
@@ -925,7 +926,7 @@ onUnmounted(() => {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: Arial;
   font-size: 13px;
   height: 40px;
 }
@@ -938,15 +939,16 @@ onUnmounted(() => {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: Arial;
   font-size: 13px;
   height: 30px;
+  font-weight: 600;
 }
 .save-btn {
   border: 1px solid #007bff;
   background-color: #007bff;
   color: white;
-  font-weight: 300;
+  
   width: 60px;
 }
 .save-btn:hover:not(:disabled) {
@@ -995,14 +997,48 @@ onUnmounted(() => {
   border-bottom-left-radius: 11px;
   border-bottom-right-radius: 11px;
 }
-.sub-canvas-toolbar-wrapper {
+
+/* =================================
+  FINAL STYLES FOR SUBCANVAS TOOLBAR
+================================= */
+
+/* 外部容器现在只负责定位和居中，不再关心具体样式 */
+.subcanvas-toolbar-container {
+  padding: 15px 0px;
+  padding-left: -20px;
   position: absolute;
   bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 8%;
-  border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px;
-  overflow: hidden;
+  left: 38%;
+  width: 30%;
+  height: 12%; 
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  /* 增加一个 bottom padding 让 Toolbar 不会贴得太近底部 */
+  box-sizing: border-box;
+  padding-bottom: -30px;
+}
+
+.subcanvas-toolbar-container :deep(.toolbar-container) {
+  justify-content: center; 
+  position: relative;     
+}
+
+/* 将 Rate 按钮部分定位到其父容器（即带圆角的 Toolbar）的右侧 */
+.subcanvas-toolbar-container :deep(.tool-section:first-child) {
+  position: absolute;
+  /* 调整 right 值，使其在 Toolbar 的 padding 内部，看起来更协调 */
+  left: 20px;
+}
+
+.subcanvas-toolbar-container :deep(.tool-section:last-child) {
+  position: absolute;
+  /* 调整 right 值，使其在 Toolbar 的 padding 内部，看起来更协调 */
+  right: 20px;
+}
+
+/* 确保主要工具部分不会过度伸展 */
+.subcanvas-toolbar-container :deep(.tool-section:first-child) {
+  flex-grow: 0;
 }
 </style>

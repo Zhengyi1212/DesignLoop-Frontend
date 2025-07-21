@@ -16,7 +16,8 @@ defineProps({
   },
 });
 
-const emit = defineEmits(['update-panel-content', 'fetch-pipeline', 'generate']);
+// --- 核心修改: 增加 'userIdFocus' 事件 ---
+const emit = defineEmits(['update-panel-content', 'fetch-pipeline', 'generate', 'userIdFocus']);
 
 function handleInput(event, index) {
   emit('update-panel-content', {
@@ -61,7 +62,19 @@ function onGenerate() {
             <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
           </button>
         </div>
+        <!-- --- 核心修改: 监听 user_id 输入框的 focus 事件 --- -->
         <textarea
+          v-if="panel.title === 'User'"
+          class="panel-content-input"
+          :value="panel.content"
+          @input="handleInput($event, index)"
+          :placeholder="`Enter ${panel.title}...`"
+          @keydown.ctrl.z.stop
+          @keydown.meta.z.stop
+          @focus="emit('userIdFocus')"
+        ></textarea>
+        <textarea
+          v-else
           class="panel-content-input"
           :value="panel.content"
           @input="handleInput($event, index)"

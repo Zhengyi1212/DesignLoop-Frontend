@@ -27,6 +27,65 @@ import GroupNode from './components/GroupNode.vue';
 import RatingNode from './components/RatingNode.vue';
 
 
+// =================================================================
+// --- 计时器功能核心代码 开始 ---
+// =================================================================
+
+// 存储所有活动计时器的开始时间戳
+const timers = ref({});
+// 存储每个区域记录到的总时间（秒）
+const timeLogs = ref({
+  instruction: 0,
+  mainCanvas: 0,
+  subCanvas: 0,
+});
+
+/**
+ * 开始一个计时器
+ * @param {string} name - 计时器的唯一名称 (e.g., 'instruction', 'mainCanvas')
+ */
+function startTimer(name) {
+  timers.value[name] = Date.now();
+  console.log(`[Timer] 计时器 '${name}' 已启动.`);
+}
+
+/**
+ * 停止一个计时器并返回持续时间
+ * @param {string} name - 计时器的名称
+ * @returns {number} - 从开始到现在的持续时间（秒），如果计时器未启动则返回0
+ */
+function stopTimer(name) {
+  const startTime = timers.value[name];
+  if (!startTime) {
+    console.warn(`[Timer] 尝试停止一个未启动的计时器: '${name}'`);
+    return 0;
+  }
+  
+  const endTime = Date.now();
+  const durationInSeconds = (endTime - startTime) / 1000;
+  
+  // 从活动计时器中移除
+  delete timers.value[name];
+  
+  console.log(`[Timer] 计时器 '${name}' 已停止. 时长: ${durationInSeconds.toFixed(2)} 秒.`);
+  return durationInSeconds;
+}
+
+/**
+ * 处理用户ID输入框的聚焦事件，启动 instruction 计时器
+ */
+function handleUserIdFocus() {
+  // 仅当计时器未在运行时才启动，防止重复启动
+  if (!timers.value.instruction) {
+    startTimer('instruction');
+  }
+}
+
+// =================================================================
+// --- 计时器功能核心代码 结束 ---
+// =================================================================
+
+
 // State
 let nodeIdCounter = 0;
 let snapshotIdCounter = 0;
@@ -136,6 +195,25 @@ async function captureAndAddSubCanvasToPdf(pdf, parentNode) {
  * This function has been corrected to fix the edge clipping bug.
  */
 async function exportToPdf() {
+
+  
+  const finalTimes = {
+    user_id : instructionPanels.value[0].content,
+    instructionPanelDuration: timeLogs.value.instruction.toFixed(2),
+    mainCanvasDuration: timeLogs.value.mainCanvas.toFixed(2),
+    subCanvasDuration: timeLogs.value.subCanvas.toFixed(2),
+  };
+
+  console.log("流程结束，最终各区域使用总时长 (秒):", finalTimes);
+  const response = await fetch("/api/timer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(finalTimes),
+        });
+
+  const data = await response.json()
+  console.log(data)
+
   if (isExporting.value) return;
   isExporting.value = true;
 
@@ -397,7 +475,7 @@ async function handleRatingSubmit(payload) {
   const runNodeContent = payload.context.content;
   const ratings = payload.ratings
   try {
-    const response = await fetch("http://localhost:7001/submit-rating", {
+    const response = await fetch("/api/submit-rating", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -436,6 +514,7 @@ function manageSession() {
 }
 
 function clearAllStateAndExit() {
+
   nodes.value = [];
   edges.value = [];
   instructionPanels.value.forEach(panel => panel.content = '');
@@ -638,7 +717,18 @@ function handleKeyDown(event) {
   }
 }
 
+// --- 计时器修改: 更新 handleOpenSubCanvas ---
 function handleOpenSubCanvas(nodeId) {
+    // 停止 mainCanvas 计时器
+    const mainCanvasTime = stopTimer('mainCanvas');
+    if (mainCanvasTime > 0) {
+        timeLogs.value.mainCanvas += mainCanvasTime;
+        console.log(`[Timer] Main Canvas 总使用时间: ${timeLogs.value.mainCanvas.toFixed(2)} 秒.`);
+    }
+
+    // 启动 subCanvas 计时器
+    startTimer('subCanvas');
+
     const parentNode = findNode(nodeId);
     if (!parentNode) return;
     activeSubCanvasData.value = {
@@ -657,7 +747,18 @@ function handleOpenSubCanvas(nodeId) {
       };
 }
 
+// --- 计时器修改: 更新 handleCloseSubCanvas ---
 function handleCloseSubCanvas(payload) {
+  // 停止 subCanvas 计时器
+  const subCanvasTime = stopTimer('subCanvas');
+  if (subCanvasTime > 0) {
+    timeLogs.value.subCanvas += subCanvasTime;
+    console.log(`[Timer] Sub Canvas 总使用时间: ${timeLogs.value.subCanvas.toFixed(2)} 秒.`);
+  }
+
+  // 重新启动 mainCanvas 计时器
+  startTimer('mainCanvas');
+
   if (!activeSubCanvasData.value) return;
   const parentNodeId = activeSubCanvasData.value.id;
   const parentNode = findNode(parentNodeId);
@@ -938,9 +1039,20 @@ async function node_chain_autogene(nodeData) {
   addNodes(newNodes);
   await nextTick();
   addEdges(newEdges);
+  
+  // --- 计时器修改: 在节点链生成后启动 mainCanvas 计时器 ---
+  startTimer('mainCanvas');
 }
 
+// --- 计时器修改: 更新 handleGeneration ---
 async function handleGeneration(payload) {
+  // 停止 instruction 计时器
+  const instructionTime = stopTimer('instruction');
+  if (instructionTime > 0) {
+    timeLogs.value.instruction += instructionTime;
+    console.log(`[Timer] Instruction Panel 总使用时间: ${timeLogs.value.instruction.toFixed(2)} 秒.`);
+  }
+
   isGenerating.value = true;
   try {
     const response = await fetch("/api/generate-node-chain", {
@@ -952,7 +1064,10 @@ async function handleGeneration(payload) {
     });
     if (!response.ok) throw new Error(`Server responded with ${response.status}`);
     const data = await response.json();
-    if (data) node_chain_autogene(data);
+    if (data) {
+        // node_chain_autogene 将在内部启动 mainCanvas 计时器
+        await node_chain_autogene(data);
+    }
   } catch (error) {
     console.error("Error during node chain request:", error);
   } finally {
@@ -987,6 +1102,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="app-container" :class="{ 'is-resizing': isResizing }">
+    <!-- --- 计时器修改: 监听 userIdFocus 事件 --- -->
     <InstructionPanel
       :panels="instructionPanels"
       :is-generating="isGenerating"
@@ -994,12 +1110,13 @@ onBeforeUnmount(() => {
       @update-panel-content="(event) => instructionPanels[event.index].content = event.content"
       @generate="handleGeneration"
       @fetch-pipeline="handleFetchPipeline"
+      @user-id-focus="handleUserIdFocus"
     />
 
     <main class="main-content">
       <div class="top-right-actions">
         <button @click="exportToPdf" class="action-button pdf-export-button" title="Export to PDF" :disabled="isExporting">
-          <img v-if="!isExporting" src="@/assets/export.svg" lt="Click to export to PDF" height="20px" width="20px">
+          <img v-if="!isExporting" src="@/assets/export.svg" alt="Click to export to PDF" height="20px" width="20px">
        
 
           <div v-else class="spinner"></div>

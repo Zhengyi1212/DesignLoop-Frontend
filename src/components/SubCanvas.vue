@@ -546,7 +546,8 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             chain: formattedChain,
             predecessor_chain: predecessors,
             design_background: props.designBackground,
-            design_goal: props.designGoal
+            design_goal: props.designGoal,
+            user_id: props.userId,
         };
         console.log("Pre:", predecessors)
         const response = await fetch('http://localhost:7001/generate-rationale', {

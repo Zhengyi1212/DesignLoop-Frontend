@@ -34,7 +34,7 @@ const props = defineProps({
   dragHandle: String,
 });
 
-const emit = defineEmits(['create-node-from-text', 'update-node-data', 'regenerate']);
+const emit = defineEmits(['create-node-from-text', 'update-node-data', 'regenerate', 'delete']);
 
 // --- State ---
 const title = ref(props.data.title || 'New Rationale');
@@ -91,6 +91,12 @@ function handleSendData() {
   // Simulate API call duration
   setTimeout(() => { isSending.value = false; }, 2000);
 }
+
+// ✨ 新增：处理节点删除的方法
+function handleDeleteNode() {
+  emit('delete', props.id);
+}
+
 
 // --- Rationale Item Management (Height, Dragging, CRUD) ---
 function adjustItemHeight(textElement) {
@@ -235,21 +241,24 @@ function updateRationaleText(event, index) {
     <Handle id="right" :position="Position.Right" />
 
     <div class="node-header">
-      <div class="title-container" v-if="!isEditingTitle">
-        <strong @click.stop="startEditTitle" title="Click to edit title">
-          {{ title }}
-        </strong>
+       <div class="title-wrapper">
+        <div class="title-container" v-if="!isEditingTitle" @click.stop="startEditTitle">
+          <strong title="Click to edit title">
+            {{ title }}
+          </strong>
+        </div>
+        <input
+          v-else
+          ref="titleInput"
+          v-model="title"
+          @blur="saveTitle"
+          @keydown.enter.prevent="saveTitle"
+          @click.stop
+          class="title-input"
+          type="text"
+        />
       </div>
-      <input
-        v-else
-        ref="titleInput"
-        v-model="title"
-        @blur="saveTitle"
-        @keydown.enter.prevent="saveTitle"
-        @click.stop
-        class="title-input"
-        type="text"
-      />
+       <button @click.stop="handleDeleteNode" class="delete-node-btn" title="Delete Node">×</button>
     </div>
 
     <div class="rationales-list" ref="listContainerRef" @wheel.stop>
@@ -319,14 +328,24 @@ function updateRationaleText(event, index) {
   font-family: 'JetBrains Mono', sans-serif;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
+/* ✨ 修改点: 为头部添加 flex 布局 */
 .node-header {
   padding: 8px 12px;
   background-color: #fefce8;
   border-bottom: 1px solid #fef9c8;
   flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+/* ✨ 新增: 包装器样式，确保标题部分能正确伸缩 */
+.title-wrapper {
+  flex-grow: 1;
+  min-width: 0;
 }
 .node-header strong {
-  font-weight: 600; font-size: 14px; color: #4b5563; cursor: text;
+  font-weight: 600; font-size: 14px; color: #4b5563; cursor: pointer;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
 }
 .title-input {
@@ -334,6 +353,25 @@ function updateRationaleText(event, index) {
   padding: 2px 4px; color: #334155; font-family: 'JetBrains Mono', sans-serif;
   font-size: 14px; font-weight: 600; outline: none; box-sizing: border-box;
 }
+
+/* ✨ 新增: 删除按钮的样式 */
+.delete-node-btn {
+  background: none;
+  border: none;
+  font-size: 22px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #adb5bd;
+  transition: color 0.2s ease, transform 0.2s ease;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.delete-node-btn:hover {
+  color: #e74c3c;
+  transform: scale(1.1);
+}
+
 .rationales-list {
   flex-grow: 1; padding: 8px; overflow-y: auto; 
   display: flex; flex-direction: column; gap: 8px;

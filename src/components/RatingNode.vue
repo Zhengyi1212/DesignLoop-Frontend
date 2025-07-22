@@ -18,7 +18,7 @@ const emit = defineEmits(['close', 'submit']);
 const ratings = ref({
   novelty: 3, 
   relevance: 3, // 相关性
-  //clarity: 3,   // 清晰度
+  variety: 3,   
   value: 3,
   suprise: 3,
 });
@@ -117,6 +117,18 @@ function handleClose() {
           </div>
           <div class="rating-bar-filled" :style="{ width: getFilledWidth(ratings.novelty).value }"></div>
           <div class="rating-thumb" :style="{ left: getThumbPosition(ratings.novelty).value }"></div>
+        </div>
+      </div>
+
+      <div class="rating-item">
+        <label>Variety: <span class="rating-value">{{ ratings.variety }}</span></label>
+        <div class="rating-bar-container" @click="updateRatingFromClick('variety', $event)">
+          <div class="rating-bar-track"></div>
+          <div class="rating-bar-ticks">
+            <span v-for="n in 5" :key="n" class="tick"></span>
+          </div>
+          <div class="rating-bar-filled" :style="{ width: getFilledWidth(ratings.variety).value }"></div>
+          <div class="rating-thumb" :style="{ left: getThumbPosition(ratings.variety).value }"></div>
         </div>
       </div>
 

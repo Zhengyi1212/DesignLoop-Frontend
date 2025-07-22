@@ -58,6 +58,18 @@ const isGeneratingRationaleNodeId = ref(null);
 
 const subflow = useVueFlow({ id: props.nodeId });
 
+// ✨ 新增：处理 TextNode 删除的函数
+function handleDeleteTextNode(nodeId) {
+  if (!nodeId) return;
+  const nodeToRemove = subflow.findNode(nodeId);
+  if (nodeToRemove) {
+    // Vue Flow 会自动删除与该节点相连的所有边
+    subflow.removeNodes([nodeId]);
+  } else {
+    console.warn(`Attempted to delete a non-existent TextNode with ID: ${nodeId}`);
+  }
+}
+
 
 function handleRatingClose(nodeId) {
   subflow.removeNodes([nodeId]);
@@ -751,7 +763,6 @@ onUnmounted(() => {
         ref="vueFlowRef"
         @connect="onSubCanvasConnect"
         >
-          <!-- 5. 添加 GroupNode 的模板 -->
           <template #node-group="groupProps">
             <GroupNode
               v-bind="groupProps"
@@ -783,6 +794,7 @@ onUnmounted(() => {
               @update-node-data="handleNodeDataUpdate"
               @regenerate="handleTextNodeSendData"
               @create-node-from-text="handleCreateNodeFromText($event, textProps)"
+              @delete="handleDeleteTextNode"
             />
           </template>
 

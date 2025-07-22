@@ -12,7 +12,7 @@ const props = defineProps({
   data: {
     type: Object,
     required: true,
-    default: () => ({ title: 'New Rationale', rationales: [] , parent_content:'',}),
+    default: () => ({ title: 'Send a request to AI or create a new name...', rationales: [] , parent_content:'',}),
   },
 
   dragging: Boolean,
@@ -37,7 +37,7 @@ const props = defineProps({
 const emit = defineEmits(['create-node-from-text', 'update-node-data', 'regenerate', 'delete']);
 
 // --- State ---
-const title = ref(props.data.title || 'New Rationale');
+const title = ref(props.data.title || 'Send a request to AI or create a new name...');
 const rationales = ref(props.data.rationales || []);
 const parent_content = ref(props.data.parent_content || '')
 const listContainerRef = ref(null);
@@ -47,7 +47,7 @@ const isSending = ref(false);
 
 // --- Watchers ---
 watch(() => props.data, (newData) => {
-  title.value = newData.title || 'New Rationale';
+  title.value = newData.title || 'Send a request to AI or create a new name...';
   rationales.value = newData.rationales || [];
   adjustAllItemsHeight();
 }, { deep: true });

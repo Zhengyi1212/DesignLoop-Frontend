@@ -259,7 +259,7 @@ function handleCreateNodeFromText(text, sourceTextNode) {
     // 3. 为新的 TextNode 设置合理的默认尺寸
     width: 400,
     height: sourceTextNode.height,
-    
+    title : "Send new request to AI or create a new name...",
     // 4. 将传入的文本作为新节点的第一个 rationale 项
     data: { rationales: [text] },
   };

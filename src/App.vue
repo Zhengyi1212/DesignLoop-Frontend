@@ -640,7 +640,7 @@ function placeNodeOnClick(event) {
     } else if (isAddingRunNode.value) {
         newNode = { ...newNode, type: 'run', zIndex: 1, width: 200, height: 180,data: { ...newNode.data, title: 'Edit instruction...', content: 'Ready to run...', instruction: '', goal: '', connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] }, color: '#f1c40f' } };
     } else {
-        newNode = { ...newNode, type: 'custom', zIndex: 1, width: 200, height: 180,data: { ...newNode.data, title: 'New Node', content: 'Click to edit...', instruction: '', goal: '', connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] } } };
+        newNode = { ...newNode, type: 'custom', zIndex: 1, width: 200, height: 180,data: { ...newNode.data, title: 'Name this design process...', content: 'Specify design content...', instruction: '', goal: '', connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] } } };
     }
     addNodes(newNode);
     nextTick(() => { setAddMode(null); });

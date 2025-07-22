@@ -180,7 +180,7 @@ function startEditTitle() {
   isEditingTitle.value = true;
   nextTick(() => {
     titleInput.value?.focus();
-    titleInput.value?.select();
+   // titleInput.value?.select();
   });
 }
 
@@ -217,7 +217,7 @@ function onDrop(event) {
 }
 
 // --- 计算属性与原有函数 (保持不变) ---
-const nodeHeaderStyle = computed(() => ({
+const dynamicBackgroundStyle = computed(() => ({
   backgroundColor: props.data.color || '#34495e'
 }));
 
@@ -249,7 +249,7 @@ function onOpenCanvas() {
     id === 'ghost-node' ? { pointerEvents: 'none' } : {},
     nodeSelectionStyle
   ]" @dblclick="onOpenCanvas" @dragover.prevent="onDragOver" @dragleave="onDragLeave" @drop="onDrop" @wheel.stop>
-    <NodeResizer v-if="id !== 'ghost-node'" :min-width="200" :min-height="180" :visible="selected"
+    <NodeResizer v-if="id !== 'ghost-node'" :min-width="160" :min-height="140" :visible="selected"
       line-class-name="resizer-line" handle-class-name="resizer-handle" />
 
     <template v-if="id !== 'ghost-node'">
@@ -259,16 +259,16 @@ function onOpenCanvas() {
       <Handle id="right" :position="Position.Right" />
     </template>
 
-    <div class="node-header" :style="nodeHeaderStyle">
+    <div class="node-header" :style="dynamicBackgroundStyle">
       <!-- 颜色选择器已被移除 -->
       <div class="title-container" v-if="!isEditingTitle">
         <strong @click.stop="startEditTitle" title="Click to edit title">
-          {{ data.title || "New Node" }}
+          {{ data.title || "Name the design step" }}
         </strong>
       </div>
-      <input v-else ref="titleInput" v-model="data.title" @blur="saveTitle" @keydown.enter="saveTitle" @click.stop
-        @mousedown.stop class="title-input" type="text" />
-
+      <textarea v-else ref="titleInput" v-model="data.title" @blur="saveTitle" @keydown.enter.prevent="saveTitle" @click.stop
+        @mousedown.stop class="title-input" rows="2">
+      </textarea>
       <div v-if="data.appliedSnapshotId" class="snapshot-indicator" title="Applied Snapshot">
         <span class="icon" :style="{ backgroundColor: data.appliedSnapshotColor || '#27ae60' }"></span>
         ID:{{ data.appliedSnapshotId }}
@@ -276,7 +276,7 @@ function onOpenCanvas() {
       <button v-if="!isEditingTitle" class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
     </div>
 
-    <div class="rationales-list" ref="listContainerRef">
+    <div class="rationales-list" ref="listContainerRef" :style="dynamicBackgroundStyle">
       <div
         v-for="(rationale, index) in rationales"
         :key="index"
@@ -316,7 +316,7 @@ function onOpenCanvas() {
 <style scoped>
 /* --- 基础样式 (大部分来自原 CustomNode) --- */
 .custom-node {
-  border: 1px solid #b7c0ce;
+ 
   border-radius: 8px;
   font-family: 'JetBrains Mono', sans-serif;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
@@ -346,9 +346,7 @@ function onOpenCanvas() {
 }
 
 .node-header {
- 
-  border: 1px solid #b7c0ce;
-  color: white;
+  color: black; /* 确保内部元素（如删除按钮）默认继承白色 */
   padding: 8px 12px;
   border-top-left-radius: 7px;
   border-top-right-radius: 7px;
@@ -357,30 +355,39 @@ function onOpenCanvas() {
   align-items: center;
   transition: background-color 0.2s;
   flex-shrink: 0;
-  gap: 8px; /* Add gap for spacing */
+  gap: 8px;
+  /* 移除 border: 1px solid #b7c0ce; 因为背景色已经足够区分 */
 }
 
+/* 2. 移除 title-container 的颜色覆盖，让它继承白色 */
 .title-container {
-  color:  #334155;
+  /* color:  #334155; */ /* <-- 删除或注释掉这一行！*/
   flex-grow: 1;
-  min-width: 0; /* 确保在 flex 布局中可以被压缩 */
+  min-width: 0;
 }
 
+/* 3. 【核心】用全新的多行样式替换旧的 .node-header strong 规则 */
 .node-header strong {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal; /* 允许换行 */
   cursor: text;
-  display: block; /* 确保 ellipsis 生效 */
+  display: inline-block;
+  min-height: 2.8em; /* 至少两行高 */
+  line-height: 1.4em; /* 设置行高 */
+  width: 100%;
+  word-break: break-all; /* 处理长单词 */
+  /* 使用半透明白色的渐变来创建下划线 */
+  background-image: linear-gradient(to top, #888 1px, transparent 1px);
+  background-repeat: repeat-y;
+  background-size: 100% 1.4em; /* 让下划线与行高对齐 */
 }
 
+/* 4. 【核心】用全新的 textarea 样式替换旧的 .title-input 规则 */
 .title-input {
-  
   background-color: transparent;
-  color: #334155;
+  color: black; /* 确保编辑时文字也是白色 */
   border: none;
   outline: none;
-  font-family: 'JetBrains Mono', sans-serif;
+  font-family: Arial;
   font-size: 13px;
   font-weight: bold;
   width: 100%;
@@ -388,12 +395,30 @@ function onOpenCanvas() {
   margin: 0;
   flex-grow: 1;
   min-width: 0;
+  resize: none; /* 禁止拖动调整大小 */
+  line-height: 1.4em; /* 与 strong 保持一致 */
+  height: 2.8em; /* 与 strong 保持一致 */
+  /* 应用与 strong 一样的下划线样式 */
+  background-image: linear-gradient(to top, #888 1px, transparent 1px);
+  background-repeat: repeat-y;
+  background-size: 100% 1.4em;
+}
+
+/* 5. 移除 rationales-list 的背景色，让动态背景色生效 */
+.rationales-list {
+  flex-grow: 1;
+  padding: 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* background-color: #ffffff; */ /* <-- 删除或注释掉这一行！*/
 }
 
 .delete-btn {
   background: none;
   border: none;
-  color: white;
+  color: #3c3c3c ;
   font-size: 22px;
   cursor: pointer;
   padding: 0 5px;
@@ -407,17 +432,6 @@ function onOpenCanvas() {
   opacity: 1;
   color: #e74c3c;
 }
-
-.rationales-list {
-  flex-grow: 1;
-  padding: 8px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background-color: #ffffff;
-}
-
 .rationales-list::-webkit-scrollbar { width: 6px; }
 .rationales-list::-webkit-scrollbar-track { background: #f1f1f1; }
 .rationales-list::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }

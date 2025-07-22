@@ -160,8 +160,8 @@ function onShowRating() {
 <style scoped>
 /* 4. 修改/增加样式 */
 .run-node {
-  background-color: #ffffff;
-  border:1px solid #b7c0ce;
+  background-color: #fbf29b;
+  
   border-radius: 8px;
   font-family: 'JetBrains Mono', sans-serif;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -240,6 +240,7 @@ function onShowRating() {
 
 .delete-btn:hover {
   opacity: 1;
+  color: #e74c3c;
 }
 
 .node-footer {
@@ -342,7 +343,7 @@ function onShowRating() {
 }
 .content-input {
   width: 100%; height: 100%; border: none; outline: none; resize: none;
-  background-color: #ffffff;
+  background-color: #fbf29b;
   border-radius: 4px; padding: 8px; box-sizing: border-box;
   font-family: 'JetBrains Mono', sans-serif; font-size: 13px; color: #2c3e50;
 }

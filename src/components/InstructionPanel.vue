@@ -48,9 +48,14 @@ function onGenerate() {
         class="panel-box"
         :class="{ 'user-panel': panel.title === 'User' }"
         
-      >
+      >   <div v-if="panel.title === 'Design Background'" class="text-help2">
+        <div class="text-help">Instruction:</div>
+        Describe how you want to build your initial instruction
+      </div>
         <div class="panel-header">
+
           <h3>{{ panel.title }}</h3>
+        
           <button 
             v-if="panel.title === 'Pipeline'" 
             @click="onFetchPipeline($event)" 
@@ -62,6 +67,7 @@ function onGenerate() {
             <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
           </button>
         </div>
+        
         <!-- --- 核心修改: 监听 user_id 输入框的 focus 事件 --- -->
         <textarea
           v-if="panel.title === 'User'"
@@ -184,8 +190,22 @@ function onGenerate() {
 .panel-box.user-panel .panel-content-input {
     height: 30px;
     flex-grow: 0; /* Ensure it doesn't grow */
-}
+} 
 
+.text-help {
+  font-size: 14px;
+  margin-top: 4px; /* 添加此行来移除顶部边距 */
+  margin-bottom: 4px; 
+  font-weight: 200;
+  color: #4a5568;
+}
+.text-help2 {
+  font-size: 9.4px;
+  margin-top: 0; /* 添加此行来移除顶部边距 */
+  margin-bottom: 14px; 
+  font-weight: 50;
+  color: #828282;
+}
 .fetch-btn {
   background-color: #e2e8f0;
   color: #58e6e6;

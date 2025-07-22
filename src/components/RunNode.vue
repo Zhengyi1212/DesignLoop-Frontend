@@ -24,7 +24,7 @@ function startEditTitle() {
   isEditingTitle.value = true;
   nextTick(() => {
     titleInput.value?.focus();
-    titleInput.value?.select();
+    //titleInput.value?.select();
   });
 }
 
@@ -51,7 +51,7 @@ function saveChanges() {
 // --- Component Specific Logic & Handlers ---
 const nodeHeaderStyle = computed(() => {
   return {
-    backgroundColor: '#f1c40f',
+    backgroundColor: 'transparent',
     color: '#3d3f43'
   };
 });
@@ -113,16 +113,16 @@ function onShowRating() {
       >
         {{ data.title || "Edit instruction..." }}
       </strong>
-      <input
+      <textarea
         v-else
         ref="titleInput"
         v-model="data.title"
         @blur="saveChanges"
-        @keydown.enter="saveChanges"
+        @keydown.enter.prevent="saveChanges"
         @click.stop
         class="title-input"
-        type="text"
-      />
+        rows="2"
+      ></textarea>
       <button v-if="!isEditingTitle" class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
     </div>
 
@@ -191,13 +191,26 @@ function onShowRating() {
   display: flex;
   justify-content: space-between;
   align-items: center;
+ /* border-bottom: 0.2px solid #e8e9ea;*/
 }
 .node-header strong {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  min-height: 2.8em;
+  line-height: 1.4em; /* 这个值非常关键，必须与 background-size 的高度匹配 */
+  display: inline-block;
   width: 100%;
   cursor: text;
+
+  /* --- 新增/修改的下划线样式 --- */
+  /* 移除旧的边框 */
+  /* border-bottom: none; */
+  /* padding-bottom: 0; */
+
+  /* 使用渐变背景模拟下划线 */
+  background-image: linear-gradient(to top, #888 1px, transparent 1px);
+  background-repeat: repeat-y;
+  background-size: 100% 1.4em; /* 宽度100%，高度必须和行高(line-height)完全一致 */
+  word-break: break-all;
 }
 .node-content {
   padding: 12px;
@@ -310,8 +323,22 @@ function onShowRating() {
 .title-input {
   background-color: transparent;
   color: #3d3f43;
-  border: none; outline: none; font-family: 'JetBrains Mono', sans-serif;
-  font-size: 1em; font-weight: bold; width: 100%; padding: 0; margin: 0;
+  border: none;
+  outline: none;
+  font-family: 'JetBrains Mono', sans-serif;
+  font-size: 1em;
+  font-weight: bold;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  resize: none;
+  line-height: 1.4em;
+  height: 2.8em;
+  
+  /* --- 新增的下划线样式 --- */
+  background-image: linear-gradient(to top, #888 1px, transparent 1px);
+  background-repeat: repeat-y;
+  background-size: 100% 1.4em;
 }
 .content-input {
   width: 100%; height: 100%; border: none; outline: none; resize: none;

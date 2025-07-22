@@ -562,7 +562,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             user_id: props.userId,
         };
         console.log("Pre:", predecessors)
-        const response = await fetch('/api/generate-rationale', {
+        const response = await fetch('http://localhost:7001/generate-rationale', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),

@@ -67,7 +67,7 @@ function startEditTitle() {
   isEditingTitle.value = true;
   nextTick(() => {
     titleInput.value?.focus();
-    titleInput.value?.select();
+   // titleInput.value?.select();
   });
 }
 
@@ -247,7 +247,7 @@ function updateRationaleText(event, index) {
             {{ title }}
           </strong>
         </div>
-        <input
+        <textarea
           v-else
           ref="titleInput"
           v-model="title"
@@ -255,8 +255,8 @@ function updateRationaleText(event, index) {
           @keydown.enter.prevent="saveTitle"
           @click.stop
           class="title-input"
-          type="text"
-        />
+          rows="2"
+        ></textarea>
       </div>
        <button @click.stop="handleDeleteNode" class="delete-node-btn" title="Delete Node">×</button>
     </div>
@@ -331,8 +331,8 @@ function updateRationaleText(event, index) {
 /* ✨ 修改点: 为头部添加 flex 布局 */
 .node-header {
   padding: 8px 12px;
-  background-color: #fefce8;
-  border-bottom: 1px solid #fef9c8;
+  background-color: transparent; /* 改为透明 */
+  /* border-bottom: 1px solid #fef9c8; */ /* 移除边框 */
   flex-shrink: 0;
   display: flex;
   justify-content: space-between;
@@ -344,14 +344,42 @@ function updateRationaleText(event, index) {
   flex-grow: 1;
   min-width: 0;
 }
+/* 用下面的代码块完全替换掉旧的 .node-header strong 样式 */
 .node-header strong {
-  font-weight: 600; font-size: 14px; color: #4b5563; cursor: pointer;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
+  font-weight: 600;
+  font-size: 14px;
+  color: #4b5563;
+  cursor: pointer;
+  display: inline-block; 
+  white-space: normal;
+  min-height: 2.8em;
+  line-height: 1.4em;
+  width: 100%;
+  word-break: break-all;
+  background-image: linear-gradient(to top, #888 1px, transparent 1px);
+  background-repeat: repeat-y;
+  background-size: 100% 1.4em;
 }
+/* 用下面的代码块完全替换掉旧的 .title-input 样式 */
 .title-input {
-  width: 100%; background: transparent; border: transparent; border-radius: 4px;
-  padding: 2px 4px; color: #334155; font-family: 'JetBrains Mono', sans-serif;
-  font-size: 14px; font-weight: 600; outline: none; box-sizing: border-box;
+  width: 100%;
+  background: transparent;
+  border: transparent;
+  border-radius: 4px;
+  padding: 0;
+  margin: 0;
+  color: #334155;
+  font-family: 'JetBrains Mono', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  outline: none;
+  box-sizing: border-box;
+  resize: none;
+  line-height: 1.4em;
+  height: 2.8em;
+  background-image: linear-gradient(to top, #888 1px, transparent 1px);
+  background-repeat: repeat-y;
+  background-size: 100% 1.4em;
 }
 
 /* ✨ 新增: 删除按钮的样式 */

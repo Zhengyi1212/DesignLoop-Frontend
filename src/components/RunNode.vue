@@ -2,7 +2,7 @@
 import { computed, ref, nextTick } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
-
+import { marked } from 'marked';
 const props = defineProps({
   id: { type: String, required: true },
   data: { type: Object, required: true },
@@ -10,6 +10,14 @@ const props = defineProps({
   isRunning: { type: Boolean, default: false },
 });
 
+const renderedContent = computed(() => {
+  if (props.data.content) {
+    // Ensure you trust the source of this content or sanitize it
+    // if it can be created by users you don't trust.
+    return marked(props.data.content);
+  }
+  return '<p>Click the run button...</p>'; // Default message
+});
 // 1. 在 emits 列表中添加 'show-rating'
 const emit = defineEmits(['delete', 'run-node', 'update-node-data', 'run-triggered', 'show-rating']);
 
@@ -120,25 +128,32 @@ function onShowRating() {
         @blur="saveChanges"
         @keydown.enter.prevent="saveChanges"
         @click.stop
+        @mousedown.stop
         class="title-input"
         rows="2"
       ></textarea>
       <button v-if="!isEditingTitle" class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
     </div>
 
-    <div class="node-content" @click.stop="startEditContent" title="Click to edit content">
-      <p v-if="!isEditingContent" class="content-display">{{ data.content || 'Click the run button...' }}</p>
-      <textarea
-        v-else
-        ref="contentInput"
-        v-model="data.content"
-        @blur="saveChanges"
-        @click.stop
-        readonly
-        @mousedown.stop
-        class="content-input"
-      ></textarea>
-    </div>
+   <div class="node-content" 
+   @click.stop="startEditContent"
+    title="Click to edit content"
+    @wheel.stop 
+    >
+   <div v-if="!isEditingContent" class="content-display" v-html="renderedContent"></div>
+   <div
+      v-else
+      ref="contentInput"
+      :innerHTML="renderedContent"
+      contenteditable="true"
+      @blur="saveChanges"
+      @click.stop
+      @mousedown.stop
+      @keydown.esc.prevent="saveChanges"
+      @keydown.prevent 
+      class="content-input content-display"
+  ></div>
+</div>
 
     
 
@@ -219,6 +234,7 @@ function onShowRating() {
   flex-grow: 1;
   overflow-y: auto;
   cursor: text;
+  
 }
 /* 添加到你的 <style> 块中 */
 .rating-group {

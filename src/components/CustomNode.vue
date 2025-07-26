@@ -2,6 +2,7 @@
 import { computed, ref, nextTick, watch } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
+import { marked } from 'marked';
 
 defineOptions({
   inheritAttrs: false,
@@ -19,17 +20,20 @@ const props = defineProps({
 
 const emit = defineEmits(['delete', 'open-canvas', 'update-node-data', 'snapshot-dropped', 'content-changed']);
 
-// --- 核心逻辑：rationales 和 content 同步 (保持不变) ---
 const rationales = ref([]);
 const listContainerRef = ref(null);
-const content = computed(() => rationales.value.join('\n'));
+const content = computed(() => rationales.value.join('\n\n'));
 
 if (props.data.rationales && props.data.rationales.length > 0) {
   rationales.value = [...props.data.rationales];
 } else if (props.data.content) {
-  rationales.value = [props.data.content];
+  rationales.value = props.data.content.split(/\n\s*\n/).filter(r => r.trim() !== '');
+  if (rationales.value.length === 0) rationales.value = [props.data.content];
 } else {
   rationales.value = [''];
+}
+if (rationales.value.length === 0) {
+    rationales.value.push('');
 }
 
 watch(() => props.data.rationales, (newRationales) => {
@@ -41,8 +45,82 @@ watch(() => props.data.rationales, (newRationales) => {
   }
 }, { deep: true });
 
+// =================================================================
+// --- BUG修复：Markdown编辑与回车键逻辑 ---
+// =================================================================
 
+const editingRationaleIndex = ref(null);
+const rationaleTextareaRefs = ref([]);
+
+
+function getRenderedHtml(rationale, index) {
+  let contentToRender = rationale || '';
+  const title = props.data.title || '';
+
+  // 保持原有逻辑：如果第一行是匹配标题的H1，则不渲染它
+  if (index === 0 && contentToRender && title) {
+    const lines = contentToRender.split('\n');
+    const firstLine = lines[0].trim();
+    const potentialTitleInContent = firstLine.startsWith('# ')
+      ? firstLine.substring(2).trim()
+      : null;
+    if (potentialTitleInContent && potentialTitleInContent === title.trim()) {
+      contentToRender = lines.slice(1).join('\n').trim();
+    }
+  }
+  return marked(contentToRender);
+}
+
+async function startEditing(index) {
+  editingRationaleIndex.value = index;
+  await nextTick();
+  const textareaEl = rationaleTextareaRefs.value[index];
+  if (textareaEl) {
+    textareaEl.focus();
+    textareaEl.style.height = 'auto';
+    textareaEl.style.height = `${textareaEl.scrollHeight}px`;
+  }
+}
+
+function stopEditing(index) {
+  if (editingRationaleIndex.value === index) {
+    editingRationaleIndex.value = null;
+  }
+}
+
+function handleTextareaInput(event, index) {
+    const textarea = event.target;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+    if (rationales.value[index] !== textarea.value) {
+        rationales.value[index] = textarea.value;
+        emitUpdate();
+    }
+}
+
+async function handleKeyDown(event, index) {
+  if (event.key === 'Enter' && event.shiftKey) {
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    const textarea = event.target;
+    const isLastItem = index === rationales.value.length - 1;
+    const text = textarea.value;
+    const cursorPosition = textarea.selectionStart;
+
+    if (isLastItem && cursorPosition === text.length && text.endsWith('\n')) {
+      event.preventDefault();
+      rationales.value[index] = text.trimEnd();
+      emitUpdate();
+      await addNewRationale(true);
+    }
+  }
+}
+
+// =================================================================
 // --- 拖拽排序逻辑 (保持不变) ---
+// =================================================================
 const isDragging = ref(false);
 const draggedIndex = ref(null);
 const dragOverIndex = ref(null);
@@ -50,7 +128,7 @@ const draggedItemClone = ref(null);
 const cloneStyle = ref({});
 
 function handleMouseDown(event, index) {
-  if (event.target.closest('.rationale-actions') || event.target.isContentEditable) {
+  if (event.target.closest('.rationale-actions') || editingRationaleIndex.value !== null) {
     return;
   }
   event.preventDefault();
@@ -111,18 +189,13 @@ function handleMouseUp() {
   window.removeEventListener('mouseup', handleMouseUp);
 }
 
-// --- 文字块管理 (保持不变) ---
 async function addNewRationale(focus = true) {
   rationales.value.push('');
   emitUpdate();
 
   if (focus) {
     await nextTick();
-    const listItems = listContainerRef.value.querySelectorAll('.rationale-text');
-    const newItem = listItems[listItems.length - 1];
-    if (newItem) {
-      newItem.focus();
-    }
+    startEditing(rationales.value.length - 1);
   }
 }
 
@@ -135,29 +208,6 @@ function deleteRationale(index) {
   emitUpdate();
 }
 
-function updateRationaleText(event, index) {
-  const newText = event.target.innerText;
-  if (rationales.value[index] !== newText) {
-    rationales.value[index] = newText;
-    emitUpdate();
-  }
-}
-
-async function handleKeyDown(event, index) {
-  if (event.key === 'Enter' && !event.shiftKey) {
-     const isLastItem = index === rationales.value.length - 1;
-     const currentText = event.target.innerText;
-     if (isLastItem && currentText.endsWith('\n\n')) {
-        event.preventDefault();
-        rationales.value[index] = currentText.trimEnd();
-        emitUpdate();
-        await nextTick();
-        addNewRationale(true);
-     }
-  }
-}
-
-// --- 统一的数据更新事件 (保持不变) ---
 function emitUpdate() {
   emit('update-node-data', {
     id: props.id,
@@ -170,8 +220,6 @@ function emitUpdate() {
   emit('content-changed', props.id);
 }
 
-
-// --- 原有的编辑和拖放逻辑 (保持不变) ---
 const isEditingTitle = ref(false);
 const titleInput = ref(null);
 
@@ -180,7 +228,6 @@ function startEditTitle() {
   isEditingTitle.value = true;
   nextTick(() => {
     titleInput.value?.focus();
-   // titleInput.value?.select();
   });
 }
 
@@ -216,7 +263,6 @@ function onDrop(event) {
   }
 }
 
-// --- 计算属性与原有函数 (保持不变) ---
 const dynamicBackgroundStyle = computed(() => ({
   backgroundColor: props.data.color || '#34495e'
 }));
@@ -235,7 +281,7 @@ function onDelete() {
 }
 
 function onOpenCanvas() {
-  if (isEditingTitle.value) return;
+  if (isEditingTitle.value || editingRationaleIndex.value !== null) return;
   if (props.id === 'ghost-node') return;
   emit('open-canvas', props.id);
 }
@@ -260,14 +306,13 @@ function onOpenCanvas() {
     </template>
 
     <div class="node-header" :style="dynamicBackgroundStyle">
-      <!-- 颜色选择器已被移除 -->
       <div class="title-container" v-if="!isEditingTitle">
         <strong @click.stop="startEditTitle" title="Click to edit title">
           {{ data.title || "Name the design step" }}
         </strong>
       </div>
       <textarea v-else ref="titleInput" v-model="data.title" @blur="saveTitle" @keydown.enter.prevent="saveTitle" @click.stop
-        @mousedown.stop class="title-input" rows="2">
+        @mousedown.stop class="title-input" rows="1">
       </textarea>
       <div v-if="data.appliedSnapshotId" class="snapshot-indicator" title="Applied Snapshot">
         <span class="icon" :style="{ backgroundColor: data.appliedSnapshotColor || '#27ae60' }"></span>
@@ -283,19 +328,35 @@ function onOpenCanvas() {
         class="rationale-item"
         :class="{
           'is-dragging-placeholder': isDragging && draggedIndex === index,
-          'is-drop-target': isDragging && dragOverIndex === index
+          'is-drop-target': isDragging && dragOverIndex === index,
+          'is-editing': editingRationaleIndex === index
         }"
         @mousedown="handleMouseDown($event, index)"
       >
+        <!-- 显示模式: 从计算属性中获取渲染后的HTML -->
+        <!-- --- 核心修改：将 v-if/v-else 替换为 v-show --- -->
+        <!-- v-show 仅切换 display 属性，而不是从DOM中移除元素，这在复杂组件中更稳定 -->
+
+        <!-- 显示模式 -->
         <div
-          class="rationale-text"
-          contenteditable="true"
-          @blur="updateRationaleText($event, index)"
+          v-show="editingRationaleIndex !== index"
+          class="rationale-content markdown-body"
+          @click.stop="startEditing(index)"
+          v-html="getRenderedHtml(rationale, index)"
+        ></div>
+
+        <!-- 编辑模式 -->
+        <textarea
+          v-show="editingRationaleIndex === index"
+          :ref="el => { if (el) rationaleTextareaRefs[index] = el }"
+          :value="rationale"
+          @input="handleTextareaInput($event, index)"
+          @blur="stopEditing(index)"
           @keydown="handleKeyDown($event, index)"
           @click.stop
           @mousedown.stop
-          v-text="rationale"
-        ></div>
+          class="rationale-content rationale-textarea"
+        ></textarea>
 
         <div class="rationale-actions">
            <button class="action-btn delete-btn-item" @click.stop="deleteRationale(index)" title="Delete this item">
@@ -316,7 +377,6 @@ function onOpenCanvas() {
 <style scoped>
 /* --- 基础样式 (大部分来自原 CustomNode) --- */
 .custom-node {
- 
   border-radius: 8px;
   font-family: 'JetBrains Mono', sans-serif;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
@@ -327,7 +387,7 @@ function onOpenCanvas() {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background-color: #ffffff; /* 设置一个白色背景 */
+  background-color: #ffffff;
 }
 
 .custom-node.is-dragging-over {
@@ -346,7 +406,7 @@ function onOpenCanvas() {
 }
 
 .node-header {
-  color: black; /* 确保内部元素（如删除按钮）默认继承白色 */
+  color: black;
   padding: 8px 12px;
   border-top-left-radius: 7px;
   border-top-right-radius: 7px;
@@ -356,35 +416,29 @@ function onOpenCanvas() {
   transition: background-color 0.2s;
   flex-shrink: 0;
   gap: 8px;
-  /* 移除 border: 1px solid #b7c0ce; 因为背景色已经足够区分 */
 }
 
-/* 2. 移除 title-container 的颜色覆盖，让它继承白色 */
 .title-container {
-  /* color:  #334155; */ /* <-- 删除或注释掉这一行！*/
   flex-grow: 1;
   min-width: 0;
 }
 
-/* 3. 【核心】用全新的多行样式替换旧的 .node-header strong 规则 */
 .node-header strong {
-  white-space: normal; /* 允许换行 */
+  white-space: normal;
   cursor: text;
   display: inline-block;
-  min-height: 2.8em; /* 至少两行高 */
-  line-height: 1.4em; /* 设置行高 */
+  min-height: 2.8em;
+  line-height: 1.4em;
   width: 100%;
-  word-break: break-all; /* 处理长单词 */
-  /* 使用半透明白色的渐变来创建下划线 */
+  word-break: break-all;
   background-image: linear-gradient(to top, #888 1px, transparent 1px);
   background-repeat: repeat-y;
-  background-size: 100% 1.4em; /* 让下划线与行高对齐 */
+  background-size: 100% 1.4em;
 }
 
-/* 4. 【核心】用全新的 textarea 样式替换旧的 .title-input 规则 */
 .title-input {
   background-color: transparent;
-  color: black; /* 确保编辑时文字也是白色 */
+  color: black;
   border: none;
   outline: none;
   font-family: Arial;
@@ -395,16 +449,14 @@ function onOpenCanvas() {
   margin: 0;
   flex-grow: 1;
   min-width: 0;
-  resize: none; /* 禁止拖动调整大小 */
-  line-height: 1.4em; /* 与 strong 保持一致 */
-  height: 2.8em; /* 与 strong 保持一致 */
-  /* 应用与 strong 一样的下划线样式 */
+  resize: none;
+  line-height: 1.4em;
+  height: 2.8em;
   background-image: linear-gradient(to top, #888 1px, transparent 1px);
   background-repeat: repeat-y;
   background-size: 100% 1.4em;
 }
 
-/* 5. 移除 rationales-list 的背景色，让动态背景色生效 */
 .rationales-list {
   flex-grow: 1;
   padding: 8px;
@@ -412,7 +464,6 @@ function onOpenCanvas() {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* background-color: #ffffff; */ /* <-- 删除或注释掉这一行！*/
 }
 
 .delete-btn {
@@ -425,7 +476,7 @@ function onOpenCanvas() {
   line-height: 1;
   opacity: 0.8;
   transition: opacity 0.2s;
-  flex-shrink: 0; /* Prevent button from shrinking */
+  flex-shrink: 0;
 }
 
 .delete-btn:hover {
@@ -448,28 +499,110 @@ function onOpenCanvas() {
   position: relative;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   overflow: hidden;
-  padding-bottom: 28px; /* 为操作按钮留出空间 */
+  padding-bottom: 28px;
+}
+.rationale-item.is-editing {
+  cursor: default;
 }
 .rationale-item:hover {
   border-color: #3b82f6;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
-.rationale-text {
+.rationale-content {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
   padding: 4px;
   border-radius: 4px;
   transition: background-color 0.2s;
+  min-height: 1.5em; 
+  line-height: 1.5;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.markdown-body {
   cursor: text;
-  min-height: 1.2em; /* 确保空块也有高度 */
 }
-.rationale-text:focus {
+.markdown-body:empty::before {
+  content: 'Click to edit or drop snapshot...';
+  color: #9ca3af;
+  font-style: italic;
+  pointer-events: none;
+}
+
+.rationale-textarea {
+  border: none;
   outline: none;
-  background-color: #eff6ff;
-  box-shadow: 0 0 0 2px #3b82f6 inset;
+  background-color: #eff6ff; 
+  box-shadow: 0 0 0 2px #3b82f6 inset; 
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  resize: none; 
+  overflow-y: hidden; 
 }
+
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3),
+.markdown-body :deep(h4),
+.markdown-body :deep(h5),
+.markdown-body :deep(h6) {
+    margin-top: 0.8em;
+    margin-bottom: 0.4em;
+    font-weight: 600;
+    line-height: 1.25;
+}
+.markdown-body :deep(h1) { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: .3em;}
+.markdown-body :deep(h2) { font-size: 1.3em; border-bottom: 1px solid #eaecef; padding-bottom: .3em;}
+.markdown-body :deep(h3) { font-size: 1.15em; }
+.markdown-body :deep(p) { margin-top: 0; margin-bottom: 0.8em; }
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+    padding-left: 2em;
+    margin-top: 0;
+    margin-bottom: 0.8em;
+}
+.markdown-body :deep(li) {
+    margin-bottom: 0.2em;
+}
+.markdown-body :deep(code) {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+    background-color: rgba(27,31,35,0.05);
+    padding: 0.2em 0.4em;
+    font-size: 85%;
+    border-radius: 3px;
+}
+.markdown-body :deep(pre) {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+    background-color: #f6f8fa;
+    padding: 1em;
+    border-radius: 6px;
+    overflow-x: auto;
+    line-height: 1.45;
+}
+.markdown-body :deep(pre code) {
+    padding: 0;
+    background-color: transparent;
+    font-size: 100%;
+}
+.markdown-body :deep(blockquote) {
+    border-left: 0.25em solid #dfe2e5;
+    padding: 0 1em;
+    color: #6a737d;
+    margin-left: 0;
+    margin-right: 0;
+}
+.markdown-body :deep(hr) {
+    height: .25em;
+    padding: 0;
+    margin: 24px 0;
+    background-color: #e1e4e8;
+    border: 0;
+}
+
 
 .rationale-actions {
   position: absolute;

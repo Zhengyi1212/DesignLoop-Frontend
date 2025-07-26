@@ -530,17 +530,6 @@ function startNewSession() {
     location.reload();
 }
 
-function ensureGroupAtBottom() {
-  const sorted = [
-    ...nodes.value.filter(n => n.type === 'group'),
-    ...nodes.value.filter(n => n.type !== 'group'),
-  ];
-  const oldOrder = nodes.value.map(n => n.id).join(',');
-  const newOrder = sorted.map(n => n.id).join(',');
-  if (oldOrder !== newOrder) {
-    nodes.value = sorted;
-  }
-}
 
 watch(
   [nodes, edges, instructionPanels, snapshots],
@@ -887,6 +876,7 @@ async function handleNodeRun(nodeId) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+                project_id : instructionPanels.value[0].content,
                 design_background: instructionPanels.value[1].content,
                 design_goal: instructionPanels.value[2].content,
                 node_title: node.data.title,
@@ -973,16 +963,23 @@ function handleRunTriggered(targetNodeId) {
 
 async function handleFetchPipeline(payload) {
   isFetchingPipeline.value = true;
+  //if (instructionPanels.value[0].content === '') {
+    //alert('Please enter a User ID before generating the pipeline.'); // 提醒用户
+    //return; // 终止函数，不发送API请求
+  //}
+  console.log(instructionPanels.value[0].content)
   try {
     const response = await fetch("/api/pipeline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        project_id : instructionPanels.value[0].content,
         user_id: instructionPanels.value[0].content,
         design_background: instructionPanels.value[1].content,
         design_goal: instructionPanels.value[2].content,
       }),
     });
+    console.log("123123123123123123123333333333333333333333")
     if (!response.ok) throw new Error(`Server responded with ${response.status}`);
     const data = await response.json();
     instructionPanels.value[3].content = Array.isArray(data.pipeline) ? data.pipeline.join('\n') : String(data.pipeline);
@@ -1057,6 +1054,7 @@ async function handleGeneration(payload) {
   try {
     const response = await fetch("/api/generate-node-chain", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        project_id: instructionPanels.value[0].content,
         pipeline: instructionPanels.value[3].content,
         design_background: instructionPanels.value[1].content,
         design_goal:instructionPanels.value[2].content
@@ -1065,8 +1063,9 @@ async function handleGeneration(payload) {
     if (!response.ok) throw new Error(`Server responded with ${response.status}`);
     const data = await response.json();
     if (data) {
+        const pure_data = data.node_contents
         // node_chain_autogene 将在内部启动 mainCanvas 计时器
-        await node_chain_autogene(data);
+        await node_chain_autogene(pure_data);
     }
   } catch (error) {
     console.error("Error during node chain request:", error);

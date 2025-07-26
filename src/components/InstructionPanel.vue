@@ -48,8 +48,8 @@ function onGenerate() {
         class="panel-box"
         :class="{ 'user-panel': panel.title === 'User' }"
         
-      >   <div v-if="panel.title === 'Design Background'" class="text-help2">
-        <div class="text-help">Instruction:</div>
+      ><div v-if="panel.title === 'Design Background'" class="text-help2">
+        <div class="text-help">  Instruction:</div>
         Describe how you want to build your initial instruction
       </div>
         <div class="panel-header">
@@ -155,9 +155,8 @@ function onGenerate() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 0 5px 8px 5px; /* Added some margin for alignment */
+  margin: 0 0 8px 0; /* Removed horizontal margin for alignment */
 }
-
 .panel-header h3 {
   margin: 0;
   font-size: 13px;

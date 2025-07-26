@@ -22,7 +22,7 @@ const props = defineProps({
   initialEdges: { type: Array, required: true },
   parentNodeTitle: { type: String, default: '' },
   parentNodeContent: { type: String, default: '' },
-  parentNodeInstruction: { type: String, default: '' },
+ // parentNodeInstruction: { type: String, default: '' },
   parentNodeGoal: { type: String, default: '' },
   designBackground : { type: String, default: '' },
   designGoal : { type: String, default: '' },
@@ -45,7 +45,7 @@ const isShowingRunNode = ref(false);
 const vueFlowRef = ref(null);
 const chainList = ref(null || props.initialChainList)
 
-const instruction = ref( props.parentNodeInstruction || '');
+//const instruction = ref( props.parentNodeInstruction || '');
 const goal = ref(props.parentNodeGoal || '');
 const isSubCanvasRunning = ref(false);
 const isSaveButtonRunning = ref(false);
@@ -84,8 +84,9 @@ async function handleRatingSubmit(payload) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        project_id: props.userId,
         ratings: payload.ratings,
-        instruction: payload.context.instruction,
+     //   instruction: payload.context.instruction,
         goal: payload.context.goal,
         chainList: payload.context.chainList,
         user_id: props.userId,
@@ -123,7 +124,7 @@ function handleShowSubCanvasRating() {
         position,
         data: {
             context: {
-                instruction: instruction.value,
+             //   instruction: instruction.value,
                 goal: goal.value,
                 chainList: chainList.value,
             }
@@ -157,10 +158,11 @@ async function handleTextNodeSendData({ id, title, rationales, parent_content })
   
   // 2. 构造发送到后端的完整载荷
   const payload = {
+    project_id: props.userId,
     parent_content,
     title,
     rationales,
-    instruction: instruction.value,
+  //  instruction: instruction.value,
     goal: goal.value,
     user_id: props.userId, 
     design_background: props.designBackground,
@@ -271,7 +273,7 @@ function handleCreateNodeFromText(text, sourceTextNode) {
 watch(chainList, (newChainList) => {
     emit('update:data', {
         nodeId: props.nodeId,
-        instruction: instruction.value,
+    //    instruction: instruction.value,
         goal: goal.value,
         chain: newChainList,
     });
@@ -298,7 +300,7 @@ async function handleSaveButton() {
       parentNodeTitle: props.parentNodeTitle,
       title: `Version of: ${goal.value || 'Untitled'}`,
       data: {
-        instruction: instruction.value,
+      //  instruction: instruction.value,
         goal: goal.value,
         chain : chainList.value,
         subGraph: {
@@ -478,7 +480,7 @@ function handleNodeSave(event) {
 function onFieldBlur() {
   emit('update:data', {
     nodeId: props.nodeId,
-    instruction: instruction.value,
+   // instruction: instruction.value,
     goal: goal.value,
   });
 }
@@ -492,7 +494,7 @@ function generateNodeChain(nodeDataList) {
     const content = element || '';
     const newNode = {
       id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`, type: 'chain',
-      position: { x: startX + index * gapX, y: startY }, width: 120, height: 70,
+      position: { x: startX + index * gapX, y: startY }, width: 140, height: 90,
       data: { content: content, connections: { in: [], out: [] } },
     };
     newNodes.push(newNode);
@@ -553,16 +555,17 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             parent_node_title: props.parentNodeTitle,
             parent_node_content: props.parentNodeContent,
             goal: goal.value,
-            instruction: instruction.value,
+           // instruction: instruction.value,
             current_node_content: sourceNode.data.content,
             chain: formattedChain,
             predecessor_chain: predecessors,
             design_background: props.designBackground,
             design_goal: props.designGoal,
             user_id: props.userId,
+            project_id:props.userId
         };
         console.log("Pre:", predecessors)
-        const response = await fetch('http://localhost:7001/generate-rationale', {
+        const response = await fetch('/api/generate-rationale', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -574,7 +577,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
         }
 
         const data = await response.json();
-        const title = data.title ;
+        const title = data.rationale.title ;
         console.log(title)
         const dataString = JSON.stringify(data.rationale);
         const regex = /"([^"]+)"|'([^']+)'/g;
@@ -644,13 +647,14 @@ async function handleSubCanvasRun() {
   isSubCanvasRunning.value = true;
 
   try {
-    const userInstruction = instruction.value?.trim();
     const userGoal = goal.value?.trim();
+    /*const userInstruction = instruction.value?.trim();
+    
     if (!userInstruction || !userGoal) {
       alert("Please provide both an instruction and a goal for the exploration.");
       isSubCanvasRunning.value = false;
       return;
-    }
+    }*/
     const allNodes = subflow.getNodes.value;
     const allEdges = subflow.getEdges.value;
     const nodesToRemove = allNodes.filter(n => (n.type === 'chain' && !n.data.isManual) || n.type === 'text');
@@ -664,7 +668,8 @@ async function handleSubCanvasRun() {
     const payload = {
       design_background: props.designBackground, design_goal: props.designGoal,
       parent_node_content: props.parentNodeContent, parent_node_title : props.parentNodeTitle,
-      instruction: userInstruction, goal: userGoal,
+      //instruction: userInstruction, 
+      goal: userGoal, project_id:props.userId,
     };
     const response = await fetch(url, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
@@ -674,8 +679,8 @@ async function handleSubCanvasRun() {
       throw new Error(`Server responded with ${response.status}: ${errorData.detail || response.statusText}`);
     }
     const data = await response.json();
-    chainList.value = data.chain;
-    generateNodeChain(data.chain);
+    chainList.value = data.thinking_chain;
+    generateNodeChain(data.thinking_chain);
   } catch (error) {
     console.error("Error during sub-canvas run:", error);
     alert(`An error occurred: ${error.message}`);
@@ -734,14 +739,15 @@ onUnmounted(() => {
       </div>
       <div class="upper-area">
         <div class="sub-canvas-fields">
+          <label for="goal">Goal：           </label>
           <div class="field">
-            <label for="goal">Goal</label>
+            
             <textarea id="goal" v-model="goal" @blur="onFieldBlur" :placeholder="'描述需要探索或解决什么问题'" rows="3"></textarea>
           </div>
-          <div class="field">
+        <!--  <div class="field">
             <label for="instruction">Instruction</label>
             <textarea id="instruction" v-model="instruction" @blur="onFieldBlur" :placeholder="'描述你希望的LLM思考或推理如何进行，例如头脑风暴、更多可能性、转变性视角、对比等等'" rows="3"></textarea>
-          </div>
+          </div>-->
         </div>
 
         <div class="run-button-wrapper">
@@ -884,26 +890,25 @@ onUnmounted(() => {
 .upper-area {
   display: flex;
   flex-direction: row;
+  align-items: center; /* Vertically align children */
   border-bottom: 1px solid #e9ecef;
+  padding: 15px 20px;
+  gap: 15px;
 }
 .sub-canvas-fields {
-  padding: 15px 20px;
-  background-color: #fdfdfd;
+  flex-grow: 1; /* Allow this section to take up available space */
   display: flex;
-  flex-direction: row;
-  gap: 20px;
-  flex-grow: 1;
+  align-items: center; /* Align label and textarea wrapper */
+  gap: 10px;
 }
 .field {
-  width: calc(50% - 10px);
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  width: 100%; /* Make the textarea's wrapper take full width of its parent */
 }
 .field label {
   font-weight: 600;
   font-size: 13px;
   color: #495057;
+  white-space: nowrap; /* Prevent label from wrapping */
 }
 .field textarea {
   width: 100%;
@@ -923,13 +928,12 @@ onUnmounted(() => {
   box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, .25);
 }
 .run-button-wrapper{
+  /* This wrapper is now just a simple container */
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 20px;
 }
+
 .run-btn {
   display: flex;
   align-items: center;

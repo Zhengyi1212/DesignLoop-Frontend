@@ -872,7 +872,7 @@ async function handleNodeRun(nodeId) {
     console.log("SU: ",successors)
     console.log("title:",node.data.title)
     try {
-        const response = await fetch("http://localhost:7001/brainstorm", {
+        const response = await fetch("/api/brainstorm", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1052,7 +1052,7 @@ async function handleGeneration(payload) {
 
   isGenerating.value = true;
   try {
-    const response = await fetch("http://localhost:7001/generate-node-chain", {
+    const response = await fetch("/api/generate-node-chain", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         project_id: instructionPanels.value[0].content,
         pipeline: instructionPanels.value[3].content,

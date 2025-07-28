@@ -252,6 +252,8 @@ function handleMouseUp() {
           @click.stop
           class="title-input"
           rows="2"
+         
+           @mousedown.stop
         ></textarea>
       </div>
        <button @click.stop="handleDeleteNode" class="delete-node-btn" title="Delete Node">×</button>

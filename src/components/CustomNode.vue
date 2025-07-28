@@ -1,8 +1,8 @@
 <script setup>
-import { computed, ref, nextTick, watch } from 'vue';
+import { computed, ref, nextTick, watch, onBeforeUpdate } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
-import { marked } from 'marked';
+
 
 defineOptions({
   inheritAttrs: false,
@@ -33,7 +33,7 @@ if (props.data.rationales && props.data.rationales.length > 0) {
   rationales.value = [''];
 }
 if (rationales.value.length === 0) {
-    rationales.value.push('');
+  rationales.value.push('');
 }
 
 watch(() => props.data.rationales, (newRationales) => {
@@ -52,24 +52,9 @@ watch(() => props.data.rationales, (newRationales) => {
 const editingRationaleIndex = ref(null);
 const rationaleTextareaRefs = ref([]);
 
-
-function getRenderedHtml(rationale, index) {
-  let contentToRender = rationale || '';
-  const title = props.data.title || '';
-
-  // 保持原有逻辑：如果第一行是匹配标题的H1，则不渲染它
-  if (index === 0 && contentToRender && title) {
-    const lines = contentToRender.split('\n');
-    const firstLine = lines[0].trim();
-    const potentialTitleInContent = firstLine.startsWith('# ')
-      ? firstLine.substring(2).trim()
-      : null;
-    if (potentialTitleInContent && potentialTitleInContent === title.trim()) {
-      contentToRender = lines.slice(1).join('\n').trim();
-    }
-  }
-  return marked(contentToRender);
-}
+onBeforeUpdate(() => {
+  rationaleTextareaRefs.value = [];
+});
 
 async function startEditing(index) {
   editingRationaleIndex.value = index;
@@ -89,13 +74,13 @@ function stopEditing(index) {
 }
 
 function handleTextareaInput(event, index) {
-    const textarea = event.target;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${textarea.scrollHeight}px`;
-    if (rationales.value[index] !== textarea.value) {
-        rationales.value[index] = textarea.value;
-        emitUpdate();
-    }
+  const textarea = event.target;
+  textarea.style.height = 'auto';
+  textarea.style.height = `${textarea.scrollHeight}px`;
+  if (rationales.value[index] !== textarea.value) {
+    rationales.value[index] = textarea.value;
+    emitUpdate();
+  }
 }
 
 async function handleKeyDown(event, index) {
@@ -311,61 +296,43 @@ function onOpenCanvas() {
           {{ data.title || "Name the design step" }}
         </strong>
       </div>
-      <textarea v-else ref="titleInput" v-model="data.title" @blur="saveTitle" @keydown.enter.prevent="saveTitle" @click.stop
-        @mousedown.stop class="title-input" rows="1">
+      <textarea v-else ref="titleInput" v-model="data.title" @blur="saveTitle" @keydown.enter.prevent="saveTitle"
+        @click.stop @mousedown.stop class="title-input" rows="1">
       </textarea>
-      <div v-if="data.appliedSnapshotId" class="snapshot-indicator" title="Applied Snapshot">
-        <span class="icon" :style="{ backgroundColor: data.appliedSnapshotColor || '#27ae60' }"></span>
-        ID:{{ data.appliedSnapshotId }}
-      </div>
       <button v-if="!isEditingTitle" class="delete-btn" @click.stop="onDelete" title="Delete Node">×</button>
     </div>
 
     <div class="rationales-list" ref="listContainerRef" :style="dynamicBackgroundStyle">
-      <div
-        v-for="(rationale, index) in rationales"
-        :key="index"
-        class="rationale-item"
-        :class="{
-          'is-dragging-placeholder': isDragging && draggedIndex === index,
-          'is-drop-target': isDragging && dragOverIndex === index,
-          'is-editing': editingRationaleIndex === index
-        }"
-        @mousedown="handleMouseDown($event, index)"
-      >
-        <!-- 显示模式: 从计算属性中获取渲染后的HTML -->
-        <!-- --- 核心修改：将 v-if/v-else 替换为 v-show --- -->
-        <!-- v-show 仅切换 display 属性，而不是从DOM中移除元素，这在复杂组件中更稳定 -->
+      <div v-for="(rationale, index) in rationales" :key="index" class="rationale-item" :class="{
+        'is-dragging-placeholder': isDragging && draggedIndex === index,
+        'is-drop-target': isDragging && dragOverIndex === index,
+        'is-editing': editingRationaleIndex === index
+      }" @mousedown="handleMouseDown($event, index)">
+        <div v-show="editingRationaleIndex !== index" class="rationale-content"
+          :class="{ 'is-placeholder': !rationale }" @click.stop="startEditing(index)">
+          {{ rationale || 'Click to edit or drop snapshot...' }}
+        </div>
 
-        <!-- 显示模式 -->
-        <div
-          v-show="editingRationaleIndex !== index"
-          class="rationale-content markdown-body"
-          @click.stop="startEditing(index)"
-          v-html="getRenderedHtml(rationale, index)"
-        ></div>
-
-        <!-- 编辑模式 -->
-        <textarea
-          v-show="editingRationaleIndex === index"
-          :ref="el => { if (el) rationaleTextareaRefs[index] = el }"
-          :value="rationale"
-          @input="handleTextareaInput($event, index)"
-          @blur="stopEditing(index)"
-          @keydown="handleKeyDown($event, index)"
-          @click.stop
-          @mousedown.stop
-          class="rationale-content rationale-textarea"
-        ></textarea>
+        <textarea v-show="editingRationaleIndex === index" :ref="el => { if (el) rationaleTextareaRefs[index] = el }"
+          :value="rationale" @input="handleTextareaInput($event, index)" @blur="stopEditing(index)"
+          @keydown="handleKeyDown($event, index)" @click.stop @mousedown.stop
+          class="rationale-content rationale-textarea"></textarea>
 
         <div class="rationale-actions">
-           <button class="action-btn delete-btn-item" @click.stop="deleteRationale(index)" title="Delete this item">
+          <button class="action-btn delete-btn-item" @click.stop="deleteRationale(index)" title="Delete this item">
             -
           </button>
         </div>
       </div>
     </div>
-  </div>
+    
+    <div class="node-footer" :style="dynamicBackgroundStyle">
+        <div v-if="data.appliedSnapshotId" class="snapshot-indicator" title="Applied Snapshot">
+            <span class="icon" :style="{ backgroundColor: data.appliedSnapshotColor || '#27ae60' }"></span>
+            ID:{{ data.appliedSnapshotId }}
+        </div>
+    </div>
+     </div>
 
   <Teleport to="body">
     <div v-if="draggedItemClone" class="rationale-item rationale-item-clone" :style="cloneStyle">
@@ -375,7 +342,7 @@ function onOpenCanvas() {
 </template>
 
 <style scoped>
-/* --- 基础样式 (大部分来自原 CustomNode) --- */
+/* --- 基础样式 --- */
 .custom-node {
   border-radius: 8px;
   font-family: 'JetBrains Mono', sans-serif;
@@ -405,6 +372,7 @@ function onOpenCanvas() {
   border-color: transparent;
 }
 
+/* --- MODIFIED: Header restored to original state --- */
 .node-header {
   color: black;
   padding: 8px 12px;
@@ -430,7 +398,7 @@ function onOpenCanvas() {
   min-height: 2.8em;
   line-height: 1.4em;
   width: 100%;
-  word-break: break-all;
+  word-break: break-word;
   background-image: linear-gradient(to top, #888 1px, transparent 1px);
   background-repeat: repeat-y;
   background-size: 100% 1.4em;
@@ -469,7 +437,7 @@ function onOpenCanvas() {
 .delete-btn {
   background: none;
   border: none;
-  color: #3c3c3c ;
+  color: #3c3c3c;
   font-size: 22px;
   cursor: pointer;
   padding: 0 5px;
@@ -483,10 +451,57 @@ function onOpenCanvas() {
   opacity: 1;
   color: #e74c3c;
 }
-.rationales-list::-webkit-scrollbar { width: 6px; }
-.rationales-list::-webkit-scrollbar-track { background: #f1f1f1; }
-.rationales-list::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
-.rationales-list::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+/* --- NEW: Node Footer Styles --- */
+.node-footer {
+  flex-shrink: 0; /* Prevent footer from shrinking */
+  padding: 4px 12px;
+  border-bottom-left-radius: 7px;
+  border-bottom-right-radius: 7px;
+  display: flex;
+  justify-content: flex-end; /* Align indicator to the right */
+  align-items: center;
+  min-height: 26px; /* Reserve a fixed height */
+  transition: background-color 0.2s;
+}
+
+/* --- MODIFIED: Snapshot Indicator is no longer absolutely positioned --- */
+.snapshot-indicator {
+  display: flex;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.7);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #34495e;
+  pointer-events: none;
+}
+
+.snapshot-indicator .icon {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.rationales-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.rationales-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.rationales-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.rationales-list::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}
 
 .rationale-item {
   background-color: #f9fafb;
@@ -500,13 +515,16 @@ function onOpenCanvas() {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   overflow: hidden;
   padding-bottom: 28px;
+  background-color: #ffffff; /* Explicitly set background for items */
 }
+
 .rationale-item.is-editing {
   cursor: default;
 }
+
 .rationale-item:hover {
   border-color: #3b82f6;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .rationale-content {
@@ -516,17 +534,13 @@ function onOpenCanvas() {
   padding: 4px;
   border-radius: 4px;
   transition: background-color 0.2s;
-  min-height: 1.5em; 
+  min-height: 1.5em;
   line-height: 1.5;
   width: 100%;
   box-sizing: border-box;
 }
 
-.markdown-body {
-  cursor: text;
-}
-.markdown-body:empty::before {
-  content: 'Click to edit or drop snapshot...';
+.rationale-content.is-placeholder {
   color: #9ca3af;
   font-style: italic;
   pointer-events: none;
@@ -535,72 +549,13 @@ function onOpenCanvas() {
 .rationale-textarea {
   border: none;
   outline: none;
-  background-color: #eff6ff; 
-  box-shadow: 0 0 0 2px #3b82f6 inset; 
+  background-color: #eff6ff;
+  box-shadow: 0 0 0 2px #3b82f6 inset;
   font-family: inherit;
   font-size: inherit;
   color: inherit;
-  resize: none; 
-  overflow-y: hidden; 
-}
-
-.markdown-body :deep(h1),
-.markdown-body :deep(h2),
-.markdown-body :deep(h3),
-.markdown-body :deep(h4),
-.markdown-body :deep(h5),
-.markdown-body :deep(h6) {
-    margin-top: 0.8em;
-    margin-bottom: 0.4em;
-    font-weight: 600;
-    line-height: 1.25;
-}
-.markdown-body :deep(h1) { font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: .3em;}
-.markdown-body :deep(h2) { font-size: 1.3em; border-bottom: 1px solid #eaecef; padding-bottom: .3em;}
-.markdown-body :deep(h3) { font-size: 1.15em; }
-.markdown-body :deep(p) { margin-top: 0; margin-bottom: 0.8em; }
-.markdown-body :deep(ul),
-.markdown-body :deep(ol) {
-    padding-left: 2em;
-    margin-top: 0;
-    margin-bottom: 0.8em;
-}
-.markdown-body :deep(li) {
-    margin-bottom: 0.2em;
-}
-.markdown-body :deep(code) {
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-    background-color: rgba(27,31,35,0.05);
-    padding: 0.2em 0.4em;
-    font-size: 85%;
-    border-radius: 3px;
-}
-.markdown-body :deep(pre) {
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-    background-color: #f6f8fa;
-    padding: 1em;
-    border-radius: 6px;
-    overflow-x: auto;
-    line-height: 1.45;
-}
-.markdown-body :deep(pre code) {
-    padding: 0;
-    background-color: transparent;
-    font-size: 100%;
-}
-.markdown-body :deep(blockquote) {
-    border-left: 0.25em solid #dfe2e5;
-    padding: 0 1em;
-    color: #6a737d;
-    margin-left: 0;
-    margin-right: 0;
-}
-.markdown-body :deep(hr) {
-    height: .25em;
-    padding: 0;
-    margin: 24px 0;
-    background-color: #e1e4e8;
-    border: 0;
+  resize: none;
+  overflow-y: hidden;
 }
 
 
@@ -634,20 +589,22 @@ function onOpenCanvas() {
   justify-content: center;
   line-height: 1;
 }
+
 .action-btn:hover {
   background-color: #d1d5db;
   border-color: #9ca3af;
 }
+
 .delete-btn-item:hover {
   background-color: #fee2e2;
   color: #ef4444;
   border-color: #fca5a5;
-  
+
 }
 
 .rationale-item-clone {
   cursor: grabbing;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   transform: scale(1.05);
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
@@ -657,51 +614,48 @@ function onOpenCanvas() {
   font-family: 'JetBrains Mono', sans-serif;
   color: #334155;
 }
+
 .is-dragging-placeholder {
   background-color: #f0f9ff;
   border: 1px dashed #bae6fd;
 }
-.is-dragging-placeholder > * {
+
+.is-dragging-placeholder>* {
   opacity: 0;
 }
+
 .is-drop-target {
   background-color: #dbeafe;
   border-color: #3b82f6;
 }
 
-:deep(.resizer-handle) { 
-  width: 8px; height: 8px; 
-  background-color: transparent; border-radius: 2px; border: 2px solid transparent; }
-:deep(.resizer-line) { border-color: transparent; border-width: 2px; }
+:deep(.resizer-handle) {
+  width: 8px;
+  height: 8px;
+  background-color: transparent;
+  border-radius: 2px;
+  border: 2px solid transparent;
+}
+
+:deep(.resizer-line) {
+  border-color: transparent;
+  border-width: 2px;
+}
+
 .custom-node :deep(.vue-flow__handle) {
   width: 12px;
   height: 11px;
   background-color: #9e9e9e;
   border: 1px solid #f0f0f0;
 }
-:deep(.vue-flow__handle:hover) { background-color: #007bff; }
-.custom-node .vue-flow__handle-top,
-.custom-node .vue-flow__handle-bottom { display: none !important;opacity: 0; }
 
-.node-header .snapshot-indicator {
-  position: absolute;
-  bottom: 5px;
-  right: 8px;
-  display: flex;
-  align-items: center;
-  background-color: rgba(255, 255, 255, 0.7);
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: bold;
-  color: #34495e;
-  pointer-events: none;
+:deep(.vue-flow__handle:hover) {
+  background-color: #007bff;
 }
-.node-header .snapshot-indicator .icon {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  margin-right: 5px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+
+.custom-node .vue-flow__handle-top,
+.custom-node .vue-flow__handle-bottom {
+  display: none !important;
+  opacity: 0;
 }
 </style>

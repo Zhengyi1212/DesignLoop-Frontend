@@ -39,7 +39,7 @@ const getRandomColor = () => {
             From: {{ snapshot.parentNodeTitle || 'Unlinked' }}
           </div>
           <div class="snapshot-goal">Goal: {{ snapshot.goal }}</div>
-          <div class="snapshot-goal">Instruction: {{ snapshot.data.instruction }}</div>
+         
           <div class="snapshot-id">ID: {{ snapshot.id }}</div>
         </div>
         <button 

@@ -202,7 +202,7 @@ async function exportToPdf() {
   // 打印出来确认一下数据结构是否正确
   console.log("流程结束，最终将发送的各区域使用时长数组 (秒):", finalTimes);
 
-  const response = await fetch("http://localhost:7001/timer", {
+  const response = await fetch("/api/timer", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(finalTimes),
@@ -935,7 +935,7 @@ async function handleNodeRun(nodeId) {
     console.log("SU: ",successors)
     console.log("title:",node.data.title)
     try {
-        const response = await fetch("http://localhost:7001/brainstorm", {
+        const response = await fetch("/api/brainstorm", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1032,7 +1032,7 @@ async function handleFetchPipeline(payload) {
   //}
   console.log(instructionPanels.value[0].content)
   try {
-    const response = await fetch("http://localhost:7001/pipeline", {
+    const response = await fetch("/api/pipeline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1115,7 +1115,7 @@ async function handleGeneration(payload) {
 
   isGenerating.value = true;
   try {
-    const response = await fetch("http://localhost:7001/generate-node-chain", {
+    const response = await fetch("/api/generate-node-chain", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         project_id: instructionPanels.value[0].content,
         pipeline: instructionPanels.value[3].content,

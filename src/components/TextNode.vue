@@ -551,7 +551,7 @@ function handleMouseUp() {
   transition: all 0.2s ease-in-out;
   color: #495057;
   border: transparent;
-   transform: scale(1.6); 
+   transform: scale(1.7); 
   border-radius: 6px;
   margin-right: 28px;
   margin-bottom: 10px;
@@ -560,12 +560,10 @@ function handleMouseUp() {
   background-color: #e0e7ff;
   border-color: #3b82f6;
   color: #3b82f6;
-  transform: scale(1.7);
+  transform: scale(1.8);
 }
 
-/* 文件: TextNode.vue */
 
-/* ... 在样式文件末尾添加 ... */
 .to-main-canvas-btn {
   background: transparent;
   color: #495057;
@@ -582,7 +580,7 @@ function handleMouseUp() {
   transition: all 0.2s ease-in-out;
   font-size: 10px; /* 调整字体大小 */
   font-weight: 500;
-  transform: scale(1.5); 
+  transform: scale(1.6); 
   margin-right: 18px; /* 和右侧按钮的间距 */
   margin-bottom: 10px;
 }
@@ -591,7 +589,7 @@ function handleMouseUp() {
   background-color: #e0e7ff;
   border-color: #3b82f6;
   color: #3b82f6;
-  transform: scale(1.6);
+  transform: scale(1.7);
 }
 
 .send-data-btn:disabled { background-color: #e9ecef; border-color: #ced4da; color: #adb5bd; cursor: not-allowed; }

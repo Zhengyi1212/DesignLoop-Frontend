@@ -57,6 +57,7 @@ function onGenerate() {
         
       ><div v-if="panel.title === 'Design Background'" class="text-help2">
         <div class="drop-mode-selector">
+          <p class="task-style">Task</p>
         <select id="options" name="mode-selector" @change="handleModeChange">
           <option value="option--">Unselected</option>
           <option value="option1">TaskA: Baseline</option>
@@ -160,6 +161,8 @@ function onGenerate() {
 .panel-box.user-panel {
   flex-grow: 0;
   flex-shrink: 0;
+  height: 14px;
+  margin-bottom: 34px;
 }
 /* The other panels will grow to fill the available space. */
 .panel-box:not(.user-panel) {
@@ -207,10 +210,14 @@ function onGenerate() {
 } 
 
 .text-help {
-  font-size: 14px;
+  
   margin-top: 4px; /* 添加此行来移除顶部边距 */
   margin-bottom: 4px; 
-  font-weight: 200;
+  
+  color: #4a5568;
+  
+  font-size: 13px;
+  font-weight: 500;
   color: #4a5568;
 }
 .text-help2 {
@@ -269,14 +276,27 @@ function onGenerate() {
   cursor: not-allowed;
 }
 .drop-mode-selector {
- 
-  margin-bottom: 10px;
+   width: 100%;
+  
+   border-radius: 8px;
+  margin-bottom: 13px;
 }
-.drop-mode-selector select {
-   margin: 0;
+.task-style {
+  margin: 0;
   font-size: 13px;
   font-weight: 500;
   color: #4a5568;
+  margin-bottom: 2px;
+}
+.drop-mode-selector select {
+   width: 100%; 
+  font-family: Arial;
+  font-size: 11.5px;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  color: #2d3748;
+  border-radius: 4px;
+  height: 24px;
 }
 .spinner {
   border: 3px solid rgba(0,0,0,0.1);

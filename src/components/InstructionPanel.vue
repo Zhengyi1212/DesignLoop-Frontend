@@ -17,7 +17,14 @@ defineProps({
 });
 
 // --- 核心修改: 增加 'userIdFocus' 事件 ---
-const emit = defineEmits(['update-panel-content', 'fetch-pipeline', 'generate', 'userIdFocus']);
+const emit = defineEmits(['update-panel-content', 'fetch-pipeline', 'generate', 'userIdFocus','mode-changed']);
+
+function handleModeChange(event) {
+  const selectedValue = event.target.value;
+  console.log('Mode changed to:', selectedValue); // For debugging
+  emit('mode-changed', selectedValue);
+}
+
 
 function handleInput(event, index) {
   emit('update-panel-content', {
@@ -49,6 +56,14 @@ function onGenerate() {
         :class="{ 'user-panel': panel.title === 'User' }"
         
       ><div v-if="panel.title === 'Design Background'" class="text-help2">
+        <div class="drop-mode-selector">
+        <select id="options" name="mode-selector" @change="handleModeChange">
+          <option value="option--">Unselected</option>
+          <option value="option1">TaskA: Baseline</option>
+          <option value="option2">TaskB: DesignerlyLoop</option>
+        </select>
+        </div>
+
         <div class="text-help">  Instruction:</div>
         Describe how you want to build your initial instruction
       </div>
@@ -253,7 +268,16 @@ function onGenerate() {
   opacity: 0.7;
   cursor: not-allowed;
 }
-
+.drop-mode-selector {
+ 
+  margin-bottom: 10px;
+}
+.drop-mode-selector select {
+   margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4a5568;
+}
 .spinner {
   border: 3px solid rgba(0,0,0,0.1);
   border-radius: 50%;

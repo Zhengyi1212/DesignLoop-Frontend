@@ -18,7 +18,7 @@ const props = defineProps({
   // Other props from Vue Flow are implicitly passed
 });
 
-const emit = defineEmits(['create-node-from-text', 'update-node-data', 'regenerate', 'delete']);
+const emit = defineEmits(['create-node-from-text', 'update-node-data', 'regenerate', 'delete','to-main-canvas']);
 
 // --- State ---
 const title = ref(props.data.title || 'Send a request to AI or create a new name...');
@@ -28,6 +28,7 @@ const listContainerRef = ref(null);
 const isEditingTitle = ref(false);
 const titleInput = ref(null);
 const isSending = ref(false);
+const isBeenTo = ref(false);
 
 // --- Watchers ---
 watch(() => props.data, (newData) => {
@@ -54,9 +55,23 @@ function emitDataUpdate() {
 const editingRationaleIndex = ref(null);
 const rationaleTextareaRefs = ref([]);
 
-// 1. Markdown 渲染函数
+
+marked.setOptions({
+  breaks: true, // This tells marked to insert a <br> for single line breaks.
+  gfm: true,    // Use GitHub Flavored Markdown for better compatibility.
+});
+
+// ... inside your Vue component script setup ...
+
+// 1. Markdown 渲染函数 (New and Improved)
 function getRenderedHtml(rationale) {
-  return marked(rationale || '');
+  // First, ensure all escaped newlines '\\n' become actual newlines '\n'.
+  const cleanText = (rationale || '').replace(/\\n/g, '\n');
+
+  // Now, let the configured 'marked' library do all the work.
+  // It will automatically turn the '\n' characters into <br> tags
+  // because we set the 'breaks: true' option above.
+  return marked(cleanText);
 }
 
 // 2. 切换到编辑模式
@@ -67,8 +82,8 @@ async function startEditing(index) {
   if (textareaEl) {
     textareaEl.focus();
     // 自动调整高度
-    textareaEl.style.height = 'auto';
-    textareaEl.style.height = `${textareaEl.scrollHeight}px`;
+    //textareaEl.style.height = 'auto';
+    //textareaEl.style.height = `${textareaEl.scrollHeight}px`;
   }
 }
 
@@ -83,8 +98,8 @@ function stopEditing(index) {
 // 4. 处理文本域输入
 function handleTextareaInput(event, index) {
     const textarea = event.target;
-    textarea.style.height = 'auto';
-    textarea.style.height = `${textarea.scrollHeight}px`;
+   // textarea.style.height = 'auto';
+   // textarea.style.height = `${textarea.scrollHeight}px`;
     if (rationales.value[index] !== textarea.value) {
         rationales.value[index] = textarea.value;
         emitDataUpdate();
@@ -127,6 +142,10 @@ async function addNewRationale(focus = false) {
 // =================================================================
 // --- 原有函数 (稍作调整) ---
 // =================================================================
+function handleToMainCanvas() {
+  emit('to-main-canvas');
+  isBeenTo.value = true
+}
 
 function startEditTitle() {
   isEditingTitle.value = true;
@@ -168,6 +187,7 @@ function deleteRationale(index) {
 
 function handleCreateNode(text) {
   emit('create-node-from-text', text);
+  isBeenTo.value = true
 }
 
 // --- 拖拽逻辑 (保持不变) ---
@@ -308,10 +328,16 @@ function handleMouseUp() {
     <div class="node-footer2">
       <button @click="handleSendData" class="send-data-btn" :disabled="isSending" title="Regenerate">
         <div v-if="isSending" class="spinner"></div>
-        <svg v-else xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
-          <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
-        </svg>
+         <img src="@/assets/Regenerate.svg" alt="Click" height="18px" width="56px">
+          
+    
       </button>
+      <button @click="handleToMainCanvas" class="to-main-canvas-btn" :disabled="isBeenTo" title="Create a copy on the main canvas">
+   <img src="@/assets/ToCanvas.svg" alt="Click" height="18px" width="56px">
+    
+  </button>
+
+      
     </div>
   </div>
 
@@ -375,39 +401,108 @@ function handleMouseUp() {
 .rationales-list::-webkit-scrollbar-thumb { background-color: #fde047; border-radius: 4px; border: 2px solid #fef9c3; }
 .rationales-list::-webkit-scrollbar-thumb:hover { background-color: #facc15; }
 
-/* Item Styles */
-.rationale-item {
-  background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;
-  padding: 12px; font-size: 13px; color: #334155; cursor: grab;
-  position: relative; min-height: 95px;
-  transition: height 0.2s ease-in-out, border-color 0.2s ease, box-shadow 0.2s ease;
-  overflow: hidden; display: flex;
+.rationale-content {
+  margin: 0;
+  white-space: pre-wrap;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  min-height: 1.5em;
+  line-height: 1.5;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: break-word; /* More robust replacement for word-break */
 }
+
+
+
+
+
+
+
+
 .rationale-item:hover { border-color: #3b82f6; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
 .rationale-item.is-editing { cursor: default; }
 
-/* --- 核心样式修改 --- */
-.rationale-content {
-  flex-grow: 1; margin: 0; white-space: pre-wrap; word-break: break-word;
-  padding: 4px; border-radius: 4px; transition: background-color 0.2s;
-  min-height: 1.5em; line-height: 1.5; width: 100%;
-  box-sizing: border-box;
+.rationale-item {
+  position: relative;
+  /* All padding, min-height, overflow, and display properties have been removed */
 }
+
+/*
+ * Step 2: The content in DISPLAY MODE (.markdown-body) now controls
+ * its own entire layout, including padding, borders, and space for the buttons.
+*/
 .markdown-body {
+  display: block; /* Ensure block layout */
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  min-height: 95px;
+  padding: 12px;
+  padding-bottom: 36px; /* Reserve space for action buttons */
   cursor: text;
-  font-size: 8px; /* Adjust this value as needed */
+  font-size: 13px; /* Restored for readability */
+  line-height: 1.5;
+  overflow-wrap: break-word;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.rationale-item:hover .markdown-body {
+    border-color: #3b82f6;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+
+/*
+ * Step 3: The content in EDIT MODE (.rationale-textarea) ALSO controls
+ * its own entire layout, matching the display mode's structure.
+*/
+.rationale-textarea {
+  display: block; /* Ensure block layout */
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  overflow-y: auto;
+  font-family: inherit;
+  font-size: 13px; /* Restored for readability */
+  color: inherit;
+  line-height: 1.5;
+
+  /* Visuals and Sizing */
+  height: 150px;
+  background-color: #eff6ff;
+  border: none; /* The box-shadow acts as the border */
+  border-radius: 8px;
+  outline: none;
+  box-shadow: 0 0 0 2px #3b82f6 inset;
+  padding: 12px;
+  padding-bottom: 36px; /* Reserve space for action buttons */
+}
+
+/*
+ * Step 4: Ensure the action buttons are positioned correctly
+ * within the new layout.
+*/
+.rationale-actions {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 .markdown-body:empty::before {
   content: 'Click to edit...';
   color: #9ca3af;
   font-style: italic;
 }
-.rationale-textarea {
-  border: none; outline: none; background-color: #eff6ff;
-  box-shadow: 0 0 0 2px #3b82f6 inset;
-  font-family: inherit; font-size: inherit; color: inherit;
-  resize: none; overflow-y: hidden;
-}
+
 .markdown-body :deep(p) { margin: 0 0 0.5em; }
 .markdown-body :deep(h1), .markdown-body :deep(h2), .markdown-body :deep(h3) { margin: 0.5em 0; border-bottom: none; padding-bottom: 0; }
 .markdown-body :deep(ul), .markdown-body :deep(ol) { padding-left: 1.5em; margin: 0.5em 0; }
@@ -416,11 +511,7 @@ function handleMouseUp() {
 
 
 /* Actions Styles */
-.rationale-actions {
-  position: absolute; bottom: 8px; right: 8px;
-  opacity: 0; transition: opacity 0.2s ease-in-out;
-  display: flex; justify-content: flex-end; align-items: center; gap: 8px;
-}
+
 .rationale-item:hover .rationale-actions { opacity: 1; }
 .action-btn {
   background-color: #fffbeb; color: #c3c4c6; border: 2px solid #c3c4c6;
@@ -440,6 +531,8 @@ function handleMouseUp() {
 /* Footer Styles */
 .node-footer, .node-footer2 {
   padding: 6px; background-color: #fefce8;
+  gap: 20px;
+  
   flex-shrink: 0; display: flex; align-items: center;
 }
 .node-footer { justify-content: space-between; }
@@ -452,16 +545,57 @@ function handleMouseUp() {
 }
 .add-new-btn:hover { background-color: #fef9c3; border-color: #eab308; color: #a16207; }
 .send-data-btn {
-  background: transparent; color: #495057; border: 1.5px solid #c3c4c6;
-  border-radius: 50%; width: 24px; height: 24px; padding: 0;
+  background: transparent; color: #495057; border: transparent;
+  border-radius: 0; width: 58px; height: 14px; padding: 0;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   transition: all 0.2s ease-in-out;
+  color: #495057;
+  border: transparent;
+   transform: scale(1.6); 
+  border-radius: 6px;
+  margin-right: 28px;
+  margin-bottom: 10px;
 }
 .send-data-btn:hover:not(:disabled) {
-  background-color: #fef9c3; border-color: #eab308; color: #a16207;
-  transform: scale(1.1); box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  background-color: #e0e7ff;
+  border-color: #3b82f6;
+  color: #3b82f6;
+  transform: scale(1.7);
 }
+
+/* 文件: TextNode.vue */
+
+/* ... 在样式文件末尾添加 ... */
+.to-main-canvas-btn {
+  background: transparent;
+  color: #495057;
+  border: transparent;
+  border-radius: 6px;
+  padding: 0 16px; /* 调整 padding 以容纳文本 */
+  height: 14px;
+  width: 58px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px; /* SVG 和文本之间的间距 */
+  transition: all 0.2s ease-in-out;
+  font-size: 10px; /* 调整字体大小 */
+  font-weight: 500;
+  transform: scale(1.5); 
+  margin-right: 18px; /* 和右侧按钮的间距 */
+  margin-bottom: 10px;
+}
+
+.to-main-canvas-btn:hover:not(:disabled) {
+  background-color: #e0e7ff;
+  border-color: #3b82f6;
+  color: #3b82f6;
+  transform: scale(1.6);
+}
+
 .send-data-btn:disabled { background-color: #e9ecef; border-color: #ced4da; color: #adb5bd; cursor: not-allowed; }
+.to-main-canvas-btn:disabled { background-color: #e9ecef; border-color: #ced4da; color: #adb5bd; cursor: not-allowed; }
 .spinner {
   border: 3px solid rgba(0, 0, 0, 0.1); border-radius: 50%; border-top-color: #a16207;
   width: 14px; height: 14px; animation: spin 1s linear infinite;

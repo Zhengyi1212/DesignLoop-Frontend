@@ -57,13 +57,17 @@ onBeforeUpdate(() => {
 });
 
 async function startEditing(index) {
+  console.log('123131231231'); // <--- 再加一行日志
+
   editingRationaleIndex.value = index;
   await nextTick();
   const textareaEl = rationaleTextareaRefs.value[index];
+  console.log('获取到的textarea元素是:', textareaEl); // <--- 再加一行日志
+
   if (textareaEl) {
     textareaEl.focus();
-    textareaEl.style.height = 'auto';
-    textareaEl.style.height = `${textareaEl.scrollHeight}px`;
+    //textareaEl.style.height = 'auto';
+    //textareaEl.style.height = `${textareaEl.scrollHeight}px`;
   }
 }
 
@@ -75,8 +79,8 @@ function stopEditing(index) {
 
 function handleTextareaInput(event, index) {
   const textarea = event.target;
-  textarea.style.height = 'auto';
-  textarea.style.height = `${textarea.scrollHeight}px`;
+  //textarea.style.height = 'auto';
+  //textarea.style.height = `${textarea.scrollHeight}px`;
   if (rationales.value[index] !== textarea.value) {
     rationales.value[index] = textarea.value;
     emitUpdate();
@@ -487,7 +491,7 @@ function onOpenCanvas() {
 }
 
 .rationales-list::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .rationales-list::-webkit-scrollbar-track {
@@ -513,13 +517,15 @@ function onOpenCanvas() {
   cursor: grab;
   position: relative;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  overflow: hidden;
-  padding-bottom: 28px;
+  overflow: visible;  /* 将 "hidden" 修改为 "visible" */
+
+  padding-bottom: 20px;
   background-color: #ffffff; /* Explicitly set background for items */
 }
 
 .rationale-item.is-editing {
   cursor: default;
+  
 }
 
 .rationale-item:hover {
@@ -555,7 +561,9 @@ function onOpenCanvas() {
   font-size: inherit;
   color: inherit;
   resize: none;
-  overflow-y: hidden;
+  height: 120px;     /* 1. 添加一个最大高度，可以根据您的喜好调整 */
+  overflow-y: auto;  
+  
 }
 
 

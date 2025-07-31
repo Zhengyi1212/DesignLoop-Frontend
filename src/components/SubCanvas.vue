@@ -31,7 +31,7 @@ const props = defineProps({
   isSaved: {type: Boolean, default: false}
 });
 
-const emit = defineEmits(['close', 'update:graph', 'update:data', 'save-snapshot']);
+const emit = defineEmits(['close', 'update:graph', 'update:data', 'save-snapshot','create-node-on-main']);
 
 const isEditModalVisible = ref(false);
 const editingNode = ref(null);
@@ -175,7 +175,7 @@ async function handleTextNodeSendData({ id, title, rationales, parent_content })
 
   try {
     // 3. 发送请求到后端
-    const response = await fetch("/api/textnode-analysis", {
+    const response = await fetch("http://localhost:7001/textnode-analysis", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -199,7 +199,7 @@ async function handleTextNodeSendData({ id, title, rationales, parent_content })
       const content = matches[1] || matches[2];
       extractedBlocks.push(content);
     }
-    const newRationaleList = extractedBlocks.filter(block => block.length > 15);
+    const newRationaleList = extractedBlocks.filter(block => block.length > 25);
 
     if (newRationaleList.length === 0) {
       console.warn(`No valid new rationales were found in the response.`);
@@ -241,6 +241,21 @@ async function handleTextNodeSendData({ id, title, rationales, parent_content })
     console.error("Failed to send or process TextNode data:", error);
     alert(`处理数据时出错: ${error.message}`);
   }
+}
+
+function handleCreateNodeOnMain(textNodeProps) {
+  if (!textNodeProps || !textNodeProps.data) return;
+
+  emit('create-node-on-main', {
+    parentNodeId: props.nodeId, // 这是 SubCanvas 对应的 CustomNode 的 ID
+    nodeData: { // 这是 TextNode 的数据
+      title: textNodeProps.data.title,
+      rationales: textNodeProps.data.rationales,
+    }
+  });
+  
+  // 可以在这里给用户一个反馈
+  // alert('节点已发送到主画布！'); 
 }
 
 // ✨ Major Refactor: 此函数现在创建 TextNode 而不是 ChainNode
@@ -488,29 +503,120 @@ function onFieldBlur() {
 function generateNodeChain(nodeDataList) {
   if (!subflow) return;
   if (!Array.isArray(nodeDataList) || nodeDataList.length === 0) return;
-  const newNodes = []; const newEdges = [];
-  const startX = 100; const startY = 200; const gapX = 250;
-  nodeDataList.forEach((element, index) => {
-    const content = element || '';
-    const newNode = {
-      id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`, type: 'chain',
-      position: { x: startX + index * gapX, y: startY }, width: 140, height: 90,
-      data: { content: content, connections: { in: [], out: [] } },
-    };
-    newNodes.push(newNode);
-  });
-  for (let i = 1; i < newNodes.length; i++) {
-    const sourceNode = newNodes[i - 1]; const targetNode = newNodes[i];
-    const newEdge = {
-      id: `sub-chain-edge-${sourceNode.id}-to-${targetNode.id}`, source: sourceNode.id, target: targetNode.id,
-      sourceHandle: 'right', targetHandle: 'left', type: 'custom', data: { animated: true, pathType: 'bezier' }
-    };
-    newEdges.push(newEdge);
-  }
-  subflow.addNodes(newNodes);
-  subflow.addEdges(newEdges);
-}
 
+  const allNewNodes = [];
+  const allNewEdges = [];
+  let lastStepNodes = []; // 存储上一个横向步骤中创建的所有节点
+
+  const startX = 100;
+  const startY = 200;
+  const gapX = 220; // 步骤之间的水平间距
+  const gapY = 120; // 并行节点之间的垂直间距
+  const nodeWidth = 160;
+  const nodeHeight = 90;
+  
+  let currentX = startX;
+
+  // --- 兼容旧的线性数据格式 ---
+  if (typeof nodeDataList[0] === 'string' || !nodeDataList[0].type) {
+    let lastNode = null;
+    nodeDataList.forEach((element) => {
+      const newNode = {
+        id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
+        type: 'chain',
+        position: { x: currentX, y: startY },
+        width: nodeWidth, height: nodeHeight,
+        data: { content: element || '', connections: { in: [], out: [] } },
+      };
+      allNewNodes.push(newNode);
+      if (lastNode) {
+        allNewEdges.push({
+          id: `sub-chain-edge-${lastNode.id}-to-${newNode.id}`,
+          source: lastNode.id, target: newNode.id,
+          sourceHandle: 'right', targetHandle: 'left',
+          type: 'custom', data: { animated: true }
+        });
+      }
+      lastNode = newNode;
+      currentX += gapX;
+    });
+    subflow.addNodes(allNewNodes);
+    subflow.addEdges(allNewEdges);
+    return;
+  }
+
+  // --- 处理新的结构化数据格式 ---
+  nodeDataList.forEach(item => {
+    
+    // --- 处理顺序步骤 (Sequential) ---
+    if (item.type === 'sequential') {
+      const newNode = {
+        id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
+        type: 'chain',
+        position: { x: currentX, y: startY },
+        width: nodeWidth, height: nodeHeight,
+        data: { content: item.step || '', connections: { in: [], out: [] } },
+      };
+      allNewNodes.push(newNode);
+
+      // 将上一步的所有节点连接到这个新的顺序节点
+      lastStepNodes.forEach(sourceNode => {
+        allNewEdges.push({
+          id: `sub-chain-edge-${sourceNode.id}-to-${newNode.id}`,
+          source: sourceNode.id,
+          target: newNode.id,
+          sourceHandle: 'right', // <-- 核心原则：从右侧出发
+          targetHandle: 'left',  // <-- 核心原则：连接到左侧
+          type: 'custom',
+          data: { animated: true }
+        });
+      });
+      
+      lastStepNodes = [newNode];
+      currentX += gapX;
+    }
+
+    // --- 处理并行步骤 (Parallel) ---
+    else if (item.type === 'parallel' && Array.isArray(item.steps)) {
+      const currentParallelNodes = [];
+      const parallelGroupYOffset = (item.steps.length - 1) * gapY / 2;
+
+      item.steps.forEach((stepContent, index) => {
+        const newNode = {
+          id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
+          type: 'chain',
+          position: { 
+            x: currentX, 
+            y: startY + (index * gapY) - parallelGroupYOffset
+          },
+          width: nodeWidth, height: nodeHeight,
+          data: { content: stepContent || '', connections: { in: [], out: [] } },
+        };
+        allNewNodes.push(newNode);
+        currentParallelNodes.push(newNode);
+
+        // 将上一步的所有节点连接到这个新的并行节点
+        lastStepNodes.forEach(sourceNode => {
+          allNewEdges.push({
+            id: `sub-chain-edge-${sourceNode.id}-to-${newNode.id}`,
+            source: sourceNode.id,
+            target: newNode.id,
+            sourceHandle: 'right', // <-- 核心原则：从右侧出发
+            targetHandle: 'left',  // <-- 核心原则：连接到左侧
+            type: 'custom',
+            data: { animated: true }
+          });
+        });
+      });
+      
+      lastStepNodes = currentParallelNodes;
+      currentX += gapX;
+    }
+  });
+
+  subflow.addNodes(allNewNodes);
+  subflow.addEdges(allNewEdges);
+}
 function findDirectPredecessorsWithText(startNodeId, allNodes, allEdges) {
     const directPredecessors = [];
     for (const edge of allEdges) {
@@ -565,7 +671,7 @@ async function handleGenerateTextNode({ sourceNodeId, position }) {
             project_id:props.userId
         };
         console.log("Pre:", predecessors)
-        const response = await fetch('/api/generate-rationale', {
+        const response = await fetch('http://localhost:7001/generate-rationale', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -664,7 +770,7 @@ async function handleSubCanvasRun() {
         if (edgesToRemove.length > 0) subflow.removeEdges(edgesToRemove.map(e => e.id));
         subflow.removeNodes(nodeIdsToRemove);
     }
-    const url = "/api/generate-thinking-chain";
+    const url = "http://localhost:7001/generate-thinking-chain";
     const payload = {
       design_background: props.designBackground, design_goal: props.designGoal,
       parent_node_content: props.parentNodeContent, parent_node_title : props.parentNodeTitle,
@@ -765,6 +871,7 @@ onUnmounted(() => {
         v-model:nodes="nodes"
         v-model:edges="edges"
         :fit-view-on-init="true"
+        :min-zoom="0.2" 
         class="sub-flow"
         ref="vueFlowRef"
         @connect="onSubCanvasConnect"
@@ -801,6 +908,7 @@ onUnmounted(() => {
               @regenerate="handleTextNodeSendData"
               @create-node-from-text="handleCreateNodeFromText($event, textProps)"
               @delete="handleDeleteTextNode"
+              @to-main-canvas="handleCreateNodeOnMain(textProps)"
             />
           </template>
 

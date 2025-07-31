@@ -36,8 +36,9 @@ const timers = ref({});
 // 存储每个区域记录到的总时间（秒）
 const timeLogs = ref({
   instruction: 0,
-  mainCanvas: 0,
-  subCanvas: 0,
+  mainCanvas: [],
+  subCanvas: [],
+  // section array for timer ===> 
 });
 
 /**
@@ -71,9 +72,7 @@ function stopTimer(name) {
   return durationInSeconds;
 }
 
-/**
- * 处理用户ID输入框的聚焦事件，启动 instruction 计时器
- */
+
 function handleUserIdFocus() {
   // 仅当计时器未在运行时才启动，防止重复启动
   if (!timers.value.instruction) {
@@ -81,9 +80,6 @@ function handleUserIdFocus() {
   }
 }
 
-// =================================================================
-// --- 计时器功能核心代码 结束 ---
-// =================================================================
 
 
 // State
@@ -109,7 +105,7 @@ const vueFlowRef = ref(null);
 const snapshots = ref([]);
 const isDetailModalVisible = ref(false);
 const selectedSnapshotForDetail = ref(null);
-
+const currentMode = ref(false);
 const isAddingNode = ref(false);
 const isAddingRunNode = ref(false);
 const isAddingGroup = ref(false);
@@ -195,17 +191,18 @@ async function captureAndAddSubCanvasToPdf(pdf, parentNode) {
  * This function has been corrected to fix the edge clipping bug.
  */
 async function exportToPdf() {
-
-  
+  console.log("Start to export to pdf")
   const finalTimes = {
     user_id : instructionPanels.value[0].content,
     instructionPanelDuration: timeLogs.value.instruction.toFixed(2),
-    mainCanvasDuration: timeLogs.value.mainCanvas.toFixed(2),
-    subCanvasDuration: timeLogs.value.subCanvas.toFixed(2),
+     mainCanvasDurations: timeLogs.value.mainCanvas.map(time => parseFloat(time.toFixed(2))),
+    subCanvasDurations: timeLogs.value.subCanvas.map(time => parseFloat(time.toFixed(2))),
   };
 
-  console.log("流程结束，最终各区域使用总时长 (秒):", finalTimes);
-  const response = await fetch("/api/timer", {
+  // 打印出来确认一下数据结构是否正确
+  console.log("流程结束，最终将发送的各区域使用时长数组 (秒):", finalTimes);
+
+  const response = await fetch("http://localhost:7001/timer", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(finalTimes),
@@ -423,6 +420,68 @@ function getNextSnapshotColor() {
   snapshotColorIndex.value = (snapshotColorIndex.value + 1) % snapshotColorPalette.length;
   return color;
 }
+
+
+function generateSameNode(payload) {
+  const { parentNodeId, nodeData } = payload;
+  
+  // 1. 找到作为定位参考的父节点
+  const parentNode = findNode(parentNodeId);
+  if (!parentNode) {
+    console.error(`[App.vue] Could not find parent node with ID: ${parentNodeId}`);
+    return;
+  }
+
+  // 2. 计算新节点的位置（在父节点的右下方）
+  const parentWidth = parentNode.dimensions?.width || 200; // 使用渲染后的宽度或默认值
+  const position = {
+    x: parentNode.position.x + parentWidth + 60, // 在父节点右侧，有 60px 间距
+    y: parentNode.position.y + 100, // 在父节点下方
+  };
+
+  // 3. 构造新的 CustomNode 对象
+  const newNode = {
+    id: `node-${nodeIdCounter++}`,
+    type: 'custom', // 明确类型为 CustomNode
+    position: position,
+    width: 240, // 默认尺寸
+    height: 240,
+    data: {
+      // 核心数据从 TextNode 传入
+      title: nodeData.title || 'Copy from Sub-Canvas',
+      rationales: JSON.parse(JSON.stringify(nodeData.rationales || [''])),
+      content: (nodeData.rationales || []).join('\n\n'),
+      
+      // CustomNode 的其他必要默认数据
+      color: activeColor.value,
+      connections: { in: [], out: [] },
+      subGraph: { nodes: [], edges: [] },
+      instruction: '',
+      goal: '',
+    },
+    zIndex: 1,
+  };
+
+  // 4. 将新节点添加到主画布
+  addNodes([newNode]);
+}
+
+function applyMode(newMode) {
+  console.log(`Mode changed to: ${newMode}`);
+  if (newMode == 'option2'){
+    currentMode.value = true;
+  } else {
+currentMode.value = false;
+  }
+  
+}
+
+
+
+
+
+
+
 function loadState() {
   const savedState = sessionStorage.getItem('appState');
   if (savedState) {
@@ -709,10 +768,14 @@ function handleKeyDown(event) {
 // --- 计时器修改: 更新 handleOpenSubCanvas ---
 function handleOpenSubCanvas(nodeId) {
     // 停止 mainCanvas 计时器
+    if (currentMode.value == false) {
+      return
+    }
     const mainCanvasTime = stopTimer('mainCanvas');
     if (mainCanvasTime > 0) {
-        timeLogs.value.mainCanvas += mainCanvasTime;
-        console.log(`[Timer] Main Canvas 总使用时间: ${timeLogs.value.mainCanvas.toFixed(2)} 秒.`);
+         timeLogs.value.mainCanvas.push(mainCanvasTime); 
+        // 为了方便调试，可以打印整个数组
+        console.log(`[Timer] Main Canvas 新增时长: ${mainCanvasTime.toFixed(2)}秒. 总记录:`, timeLogs.value.mainCanvas);
     }
 
     // 启动 subCanvas 计时器
@@ -741,8 +804,8 @@ function handleCloseSubCanvas(payload) {
   // 停止 subCanvas 计时器
   const subCanvasTime = stopTimer('subCanvas');
   if (subCanvasTime > 0) {
-    timeLogs.value.subCanvas += subCanvasTime;
-    console.log(`[Timer] Sub Canvas 总使用时间: ${timeLogs.value.subCanvas.toFixed(2)} 秒.`);
+    timeLogs.value.subCanvas.push(subCanvasTime);
+    console.log(`[Timer] Sub Canvas 新增时长: ${subCanvasTime.toFixed(2)}秒. 总记录:`, timeLogs.value.subCanvas);
   }
 
   // 重新启动 mainCanvas 计时器
@@ -872,7 +935,7 @@ async function handleNodeRun(nodeId) {
     console.log("SU: ",successors)
     console.log("title:",node.data.title)
     try {
-        const response = await fetch("/api/brainstorm", {
+        const response = await fetch("http://localhost:7001/brainstorm", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -969,7 +1032,7 @@ async function handleFetchPipeline(payload) {
   //}
   console.log(instructionPanels.value[0].content)
   try {
-    const response = await fetch("/api/pipeline", {
+    const response = await fetch("http://localhost:7001/pipeline", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1052,7 +1115,7 @@ async function handleGeneration(payload) {
 
   isGenerating.value = true;
   try {
-    const response = await fetch("/api/generate-node-chain", {
+    const response = await fetch("http://localhost:7001/generate-node-chain", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
         project_id: instructionPanels.value[0].content,
         pipeline: instructionPanels.value[3].content,
@@ -1110,6 +1173,7 @@ onBeforeUnmount(() => {
       @generate="handleGeneration"
       @fetch-pipeline="handleFetchPipeline"
       @user-id-focus="handleUserIdFocus"
+      @mode-changed="applyMode"
     />
 
     <main class="main-content">
@@ -1204,10 +1268,12 @@ onBeforeUnmount(() => {
         @close="handleCloseSubCanvas" @update:graph="handleSubCanvasUpdate"
         @update:data="handleSubCanvasDataUpdate"
         :user-id="instructionPanels[0].content"
+        @create-node-on-main="generateSameNode"
     />
     </main>
 
     <div
+      v-if="currentMode"
       class="right-panel"
       :style="{ width: rightPanelWidth + 'px' }"
       :class="{ 'is-collapsed': isRightPanelCollapsed }"

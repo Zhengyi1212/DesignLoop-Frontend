@@ -22,16 +22,16 @@ const props = defineProps({
   initialEdges: { type: Array, required: true },
   parentNodeTitle: { type: String, default: '' },
   parentNodeContent: { type: String, default: '' },
- // parentNodeInstruction: { type: String, default: '' },
+  // parentNodeInstruction: { type: String, default: '' },
   parentNodeGoal: { type: String, default: '' },
-  designBackground : { type: String, default: '' },
-  designGoal : { type: String, default: '' },
+  designBackground: { type: String, default: '' },
+  designGoal: { type: String, default: '' },
   initialChainList: { type: Array, required: true },
   userId: { type: String, required: true },
-  isSaved: {type: Boolean, default: false}
+  isSaved: { type: Boolean, default: false }
 });
 
-const emit = defineEmits(['close', 'update:graph', 'update:data', 'save-snapshot','create-node-on-main']);
+const emit = defineEmits(['close', 'update:graph', 'update:data', 'save-snapshot', 'create-node-on-main']);
 
 const isEditModalVisible = ref(false);
 const editingNode = ref(null);
@@ -40,7 +40,7 @@ const nodes = ref(props.initialNodes);
 const edges = ref(props.initialEdges);
 let subNodeIdCounter = ref(props.initialNodes.length > 0 ? Math.max(...props.initialNodes.map(n => parseInt(n.id.split('-').pop()) || 0)) + 1 : 0);
 const isAddingNode = ref(false);
-const isAddingGroup = ref(false); 
+const isAddingGroup = ref(false);
 const isShowingRunNode = ref(false);
 const vueFlowRef = ref(null);
 const chainList = ref(null || props.initialChainList)
@@ -86,7 +86,7 @@ async function handleRatingSubmit(payload) {
       body: JSON.stringify({
         project_id: props.userId,
         ratings: payload.ratings,
-     //   instruction: payload.context.instruction,
+        //   instruction: payload.context.instruction,
         goal: payload.context.goal,
         chainList: payload.context.chainList,
         user_id: props.userId,
@@ -109,30 +109,30 @@ async function handleRatingSubmit(payload) {
 
 
 function handleShowSubCanvasRating() {
-    if (!vueFlowRef.value) return;
-    const { x, y, zoom } = subflow.getViewport();
-    const { width } = vueFlowRef.value.dimensions;
-    const ratingNodeWidth = 260;
-    const padding = 20;
-    const position = {
-        x: x + (width / zoom) - ratingNodeWidth - padding*2,
-        y: y + padding
-    };
-    subflow.addNodes([{
-        id: `rating-subcanvas-${props.nodeId}`,
-        type: 'rating',
-        position,
-        data: {
-            context: {
-             //   instruction: instruction.value,
-                goal: goal.value,
-                chainList: chainList.value,
-            }
-        },
-        zIndex: 1000,
-        draggable: true,
-        selectable: false,
-    }]);
+  if (!vueFlowRef.value) return;
+  const { x, y, zoom } = subflow.getViewport();
+  const { width } = vueFlowRef.value.dimensions;
+  const ratingNodeWidth = 260;
+  const padding = 20;
+  const position = {
+    x: x + (width / zoom) - ratingNodeWidth - padding * 2,
+    y: y + padding
+  };
+  subflow.addNodes([{
+    id: `rating-subcanvas-${props.nodeId}`,
+    type: 'rating',
+    position,
+    data: {
+      context: {
+        //   instruction: instruction.value,
+        goal: goal.value,
+        chainList: chainList.value,
+      }
+    },
+    zIndex: 1000,
+    draggable: true,
+    selectable: false,
+  }]);
 }
 
 // ✨ 新增: 用于处理 TextNode 数据更新的通用函数
@@ -155,20 +155,20 @@ async function handleTextNodeSendData({ id, title, rationales, parent_content })
     alert(`操作失败：未找到目标节点。`);
     return;
   }
-  
+
   // 2. 构造发送到后端的完整载荷
   const payload = {
     project_id: props.userId,
     parent_content,
     title,
     rationales,
-  //  instruction: instruction.value,
+    //  instruction: instruction.value,
     goal: goal.value,
-    user_id: props.userId, 
+    user_id: props.userId,
     design_background: props.designBackground,
     design_goal: props.designGoal,
     parent_node_content: props.parentNodeContent,
-    parent_node_title:props.parentNodeTitle
+    parent_node_title: props.parentNodeTitle
   };
 
   console.log("Preparing to send payload to backend:", payload);
@@ -206,7 +206,7 @@ async function handleTextNodeSendData({ id, title, rationales, parent_content })
       alert('未从后端获取到有效的新论据。');
       return;
     }
-    
+
     // 5. 将新的论据追加到现有节点的 rationales 数组中
     if (!Array.isArray(nodeToUpdate.data.rationales)) {
       nodeToUpdate.data.rationales = [];
@@ -217,12 +217,12 @@ async function handleTextNodeSendData({ id, title, rationales, parent_content })
     const headerHeight = 35; const itemPaddingY = 24; const itemGapY = 8;
     const avgCharsPerLine = 35; const lineHeight = 16;
     let totalContentHeight = 0;
-    
+
     nodeToUpdate.data.rationales.forEach(text => {
       const lineCount = Math.ceil((text.length || 1) / avgCharsPerLine);
       totalContentHeight += (lineCount * lineHeight) + itemPaddingY + itemGapY;
     });
-    
+
     const calculatedHeight = headerHeight + totalContentHeight;
     const finalHeight = Math.min(Math.max(calculatedHeight, 150), 600);
 
@@ -234,7 +234,7 @@ async function handleTextNodeSendData({ id, title, rationales, parent_content })
 
     // 7. 将画布标记为有未保存的更改
     isSaved.value = false;
-    
+
     //alert('新的论据已成功追加！');
 
   } catch (error) {
@@ -253,7 +253,7 @@ function handleCreateNodeOnMain(textNodeProps) {
       rationales: textNodeProps.data.rationales,
     }
   });
-  
+
   // 可以在这里给用户一个反馈
   // alert('节点已发送到主画布！'); 
 }
@@ -264,19 +264,19 @@ function handleCreateNodeFromText(text, sourceTextNode) {
 
   const { position, dimensions } = sourceTextNode;
   const nodeWidth = dimensions?.width || 250;
-  
+
   const newNode = {
     // 1. ID 和类型已更新为 'text'
     id: `sub-text-node-${props.nodeId}-${subNodeIdCounter.value++}`,
     type: 'text',
-    
+
     // 2. 将新节点放置在源节点旁边，以获得良好的用户体验
     position: { x: position.x + nodeWidth + 60, y: position.y },
-    
+
     // 3. 为新的 TextNode 设置合理的默认尺寸
     width: 400,
     height: sourceTextNode.height,
-    title : "Send new request to AI or create a new name...",
+    title: "Send new request to AI or create a new name...",
     // 4. 将传入的文本作为新节点的第一个 rationale 项
     data: { rationales: [text] },
   };
@@ -286,12 +286,12 @@ function handleCreateNodeFromText(text, sourceTextNode) {
 
 
 watch(chainList, (newChainList) => {
-    emit('update:data', {
-        nodeId: props.nodeId,
+  emit('update:data', {
+    nodeId: props.nodeId,
     //    instruction: instruction.value,
-        goal: goal.value,
-        chain: newChainList,
-    });
+    goal: goal.value,
+    chain: newChainList,
+  });
 }, { deep: true });
 
 function handleChainNodeContentUpdate({ id, content }) {
@@ -315,9 +315,9 @@ async function handleSaveButton() {
       parentNodeTitle: props.parentNodeTitle,
       title: `Version of: ${goal.value || 'Untitled'}`,
       data: {
-      //  instruction: instruction.value,
+        //  instruction: instruction.value,
         goal: goal.value,
-        chain : chainList.value,
+        chain: chainList.value,
         subGraph: {
           nodes: JSON.parse(JSON.stringify(nodesForSnapshot)),
           edges: JSON.parse(JSON.stringify(edgesForSnapshot)),
@@ -336,23 +336,23 @@ async function handleSaveButton() {
 
 // 2. 将添加节点/分组的逻辑集中管理
 function setAddMode(mode) {
-    isAddingNode.value = mode === 'node';
-    isAddingGroup.value = mode === 'group';
-    updateEventListeners();
+  isAddingNode.value = mode === 'node';
+  isAddingGroup.value = mode === 'group';
+  updateEventListeners();
 }
 
 function toggleAddNodeMode() { setAddMode(isAddingNode.value ? null : 'node'); }
 function toggleAddGroupMode() { setAddMode(isAddingGroup.value ? null : 'group'); }
 
 function updateEventListeners() {
-    const flowElement = vueFlowRef.value?.$el;
-    if (!flowElement) return;
-    flowElement.removeEventListener('click', placeNodeOnClick, true);
-    if (isAddingNode.value || isAddingGroup.value) {
-        flowElement.addEventListener('click', placeNodeOnClick, true);
-    } else {
-        subflow.removeNodes(['ghost-node']);
-    }
+  const flowElement = vueFlowRef.value?.$el;
+  if (!flowElement) return;
+  flowElement.removeEventListener('click', placeNodeOnClick, true);
+  if (isAddingNode.value || isAddingGroup.value) {
+    flowElement.addEventListener('click', placeNodeOnClick, true);
+  } else {
+    subflow.removeNodes(['ghost-node']);
+  }
 }
 
 subflow.onPaneMouseMove((event) => {
@@ -371,15 +371,15 @@ subflow.onPaneMouseMove((event) => {
 
 
   if (isAddingGroup.value) {
-      ghostType = 'group';
-      ghostData = { label: 'Group', color: newNodeColor.value };
-      ghostDimensions = { width: 380, height: 260 };
-      ghostPosition = { x: position.x - ghostDimensions.width / 2, y: position.y - ghostDimensions.height / 2 };
+    ghostType = 'group';
+    ghostData = { label: 'Group', color: newNodeColor.value };
+    ghostDimensions = { width: 380, height: 260 };
+    ghostPosition = { x: position.x - ghostDimensions.width / 2, y: position.y - ghostDimensions.height / 2 };
   } else { // isAddingNode
-      ghostType = 'chain';
-      ghostData = { content: 'Click to place', color: newNodeColor.value, isManual: true };
-      ghostDimensions = { width: 120, height: 80 };
-      ghostPosition = { x: position.x - ghostDimensions.width / 2, y: position.y - ghostDimensions.height / 2 };
+    ghostType = 'chain';
+    ghostData = { content: 'Click to place', color: newNodeColor.value, isManual: true };
+    ghostDimensions = { width: 120, height: 80 };
+    ghostPosition = { x: position.x - ghostDimensions.width / 2, y: position.y - ghostDimensions.height / 2 };
   }
 
 
@@ -406,34 +406,34 @@ function placeNodeOnClick(event) {
 
   let newNode;
   const baseNode = {
-      id: `sub-node-${props.nodeId}-${subNodeIdCounter.value++}`,
-      position: { ...ghostNode.position },
-      data: { color: newNodeColor.value }
+    id: `sub-node-${props.nodeId}-${subNodeIdCounter.value++}`,
+    position: { ...ghostNode.position },
+    data: { color: newNodeColor.value }
   };
 
   if (isAddingGroup.value) {
-      newNode = {
-          ...baseNode,
-          type: 'group',
-          zIndex: 0,
-          width: 400,
-          height: 300,
-          data: { ...baseNode.data, label: 'My Group' }
-      };
+    newNode = {
+      ...baseNode,
+      type: 'group',
+      zIndex: 0,
+      width: 400,
+      height: 300,
+      data: { ...baseNode.data, label: 'My Group' }
+    };
   } else if (isAddingNode.value) {
-      newNode = {
-          ...baseNode,
-          type: 'chain',
-          width: 120,
-          height: 60,
-          data: { ...baseNode.data, content: '', connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] }, isManual: true },
-      };
+    newNode = {
+      ...baseNode,
+      type: 'chain',
+      width: 120,
+      height: 60,
+      data: { ...baseNode.data, content: '', connections: { in: [], out: [] }, subGraph: { nodes: [], edges: [] }, isManual: true },
+    };
   }
 
-  if(newNode) {
+  if (newNode) {
     subflow.addNodes([newNode]);
   }
-  
+
   nextTick(() => { setAddMode(null); });
 }
 
@@ -478,7 +478,7 @@ watch([subflow.nodes, subflow.edges], () => {
     nodeId: props.nodeId,
     nodes: subflow.getNodes.value.filter(n => n.type !== 'rating'),
     edges: subflow.getEdges.value,
-    isSaved : isSaved.value
+    isSaved: isSaved.value
   });
 }, { deep: true });
 
@@ -495,7 +495,7 @@ function handleNodeSave(event) {
 function onFieldBlur() {
   emit('update:data', {
     nodeId: props.nodeId,
-   // instruction: instruction.value,
+    // instruction: instruction.value,
     goal: goal.value,
   });
 }
@@ -514,7 +514,7 @@ function generateNodeChain(nodeDataList) {
   const gapY = 120; // 并行节点之间的垂直间距
   const nodeWidth = 160;
   const nodeHeight = 90;
-  
+
   let currentX = startX;
 
   // --- 兼容旧的线性数据格式 ---
@@ -547,7 +547,7 @@ function generateNodeChain(nodeDataList) {
 
   // --- 处理新的结构化数据格式 ---
   nodeDataList.forEach(item => {
-    
+
     // --- 处理顺序步骤 (Sequential) ---
     if (item.type === 'sequential') {
       const newNode = {
@@ -571,7 +571,7 @@ function generateNodeChain(nodeDataList) {
           data: { animated: true }
         });
       });
-      
+
       lastStepNodes = [newNode];
       currentX += gapX;
     }
@@ -585,8 +585,8 @@ function generateNodeChain(nodeDataList) {
         const newNode = {
           id: `sub-chain-node-${props.nodeId}-${subNodeIdCounter.value++}`,
           type: 'chain',
-          position: { 
-            x: currentX, 
+          position: {
+            x: currentX,
             y: startY + (index * gapY) - parallelGroupYOffset
           },
           width: nodeWidth, height: nodeHeight,
@@ -608,7 +608,7 @@ function generateNodeChain(nodeDataList) {
           });
         });
       });
-      
+
       lastStepNodes = currentParallelNodes;
       currentX += gapX;
     }
@@ -618,135 +618,170 @@ function generateNodeChain(nodeDataList) {
   subflow.addEdges(allNewEdges);
 }
 function findDirectPredecessorsWithText(startNodeId, allNodes, allEdges) {
-    const directPredecessors = [];
+  const allPredecessors = [];
+  const queue = [startNodeId]; // 用于广度优先搜索的队列
+  const visited = new Set([startNodeId]); // 存储已访问过的节点，防止无限循环
+
+  // 1. 从 startNodeId 开始，使用BFS反向遍历图，找到所有前序节点
+  while (queue.length > 0) {
+    const currentNodeId = queue.shift();
+
+    // 遍历所有边，查找指向当前节点的边
     for (const edge of allEdges) {
-        if (edge.target === startNodeId) {
-            const predNode = allNodes.find(n => n.id === edge.source);
-            if (predNode && predNode.type !== 'text') {
-                directPredecessors.push(predNode);
-            }
+      if (edge.target === currentNodeId) {
+        const predecessorId = edge.source;
+
+        // 如果该前序节点尚未被访问过
+        if (!visited.has(predecessorId)) {
+          visited.add(predecessorId); // 标记为已访问
+          const predNode = allNodes.find(n => n.id === predecessorId);
+
+          // 确保前序节点不是 'text' 类型的节点
+          if (predNode && predNode.type !== 'text') {
+            allPredecessors.push(predNode);
+            queue.push(predecessorId); // 将该前序节点加入队列，以便继续向上查找
+          }
         }
+      }
     }
-    if (directPredecessors.length === 0) return [];
-    const results = directPredecessors.map(predNode => {
-        let foundTextNodeContent = '';
-        let foundTextNodeTitle = '';
-        for (const edge of allEdges) {
-            let connectedNodeId = null;
-            if (edge.source === predNode.id) connectedNodeId = edge.target;
-            else if (edge.target === predNode.id) connectedNodeId = edge.source;
-            if (connectedNodeId && connectedNodeId !== startNodeId) {
-                const connectedNode = allNodes.find(n => n.id === connectedNodeId);
-                if (connectedNode && connectedNode.type === 'text') {
-                    foundTextNodeContent = connectedNode.data.rationales;
-                    foundTextNodeTitle = connectedNode.data.title;
-                    break;
-                }
-            }
+  }
+
+  if (allPredecessors.length === 0) {
+    return [];
+  }
+
+  // 2. 为每个找到的前序节点，查找其关联的 'text' 节点的内容
+  const results = allPredecessors.map(predNode => {
+    let foundTextNodeContent = '';
+    let foundTextNodeTitle = '';
+
+    // 查找与当前前序节点相连的 'text' 节点
+    for (const edge of allEdges) {
+      let connectedNodeId = null;
+      if (edge.source === predNode.id) {
+        connectedNodeId = edge.target;
+      } else if (edge.target === predNode.id) {
+        connectedNodeId = edge.source;
+      }
+
+      if (connectedNodeId) {
+        const connectedNode = allNodes.find(n => n.id === connectedNodeId);
+        if (connectedNode && connectedNode.type === 'text') {
+          foundTextNodeContent = connectedNode.data.rationales;
+          foundTextNodeTitle = connectedNode.data.title;
+          break; // 找到后即跳出循环
         }
-        return { node_content: predNode.data.content, text_content: foundTextNodeContent ,text_title: foundTextNodeTitle };
-    });
-    return results;
+      }
+    }
+    return {
+      node_content: predNode.data.content,
+      text_content: foundTextNodeContent,
+      text_title: foundTextNodeTitle
+    };
+  });
+
+  return results;
 }
 
 async function handleGenerateTextNode({ sourceNodeId, position }) {
-    const sourceNode = subflow.findNode(sourceNodeId);
-    if (!sourceNode || isGeneratingRationaleNodeId.value) return;
+  const sourceNode = subflow.findNode(sourceNodeId);
+  if (!sourceNode || isGeneratingRationaleNodeId.value) return;
 
-    isGeneratingRationaleNodeId.value = sourceNodeId;
-    try {
-        const predecessors = findDirectPredecessorsWithText(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value);
-        const formattedChain = (chainList.value || []).map(item => ({ content: item }));
-        const payload = {
-            parent_node_title: props.parentNodeTitle,
-            parent_node_content: props.parentNodeContent,
-            goal: goal.value,
-           // instruction: instruction.value,
-            current_node_content: sourceNode.data.content,
-            chain: formattedChain,
-            predecessor_chain: predecessors,
-            design_background: props.designBackground,
-            design_goal: props.designGoal,
-            user_id: props.userId,
-            project_id:props.userId
-        };
-        console.log("Pre:", predecessors)
-        const response = await fetch('/api/generate-rationale', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
+  isGeneratingRationaleNodeId.value = sourceNodeId;
+  try {
+    const predecessors = findDirectPredecessorsWithText(sourceNodeId, subflow.getNodes.value, subflow.getEdges.value);
+    const formattedChain = (chainList.value || []).map(item => ({ content: item }));
+    const payload = {
+      parent_node_title: props.parentNodeTitle,
+      parent_node_content: props.parentNodeContent,
+      goal: goal.value,
+      // instruction: instruction.value,
+      current_node_content: sourceNode.data.content,
+      chain: formattedChain,
+      predecessor_chain: predecessors,
+      design_background: props.designBackground,
+      design_goal: props.designGoal,
+      user_id: props.userId,
+      project_id: props.userId
+    };
+    console.log("Pre:", predecessors)
+    const response = await fetch('http://localhost:7001/generate-rationale', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch or parse error response' }));
-            throw new Error(errorData.detail);
-        }
-
-        const data = await response.json();
-        const title = data.rationale.title ;
-        console.log(title)
-        const dataString = JSON.stringify(data.rationale);
-        const regex = /"([^"]+)"|'([^']+)'/g;
-        let matches;
-        const extractedBlocks = [];
-
-        while ((matches = regex.exec(dataString)) !== null) {
-            const content = matches[1] || matches[2];
-            extractedBlocks.push(content);
-        }
-        const rationaleList = extractedBlocks.filter(block => block.length > 25);
-
-        if (rationaleList.length === 0) {
-            console.warn(`No text blocks longer than 15 characters were found inside single or double quotes. Total blocks extracted: ${extractedBlocks.length}`);
-            return;
-        }
-
-        const headerHeight = 35; const itemPaddingY = 24; const itemGapY = 8;
-        const avgCharsPerLine = 35; const lineHeight = 16;
-        let totalContentHeight = 0;
-        rationaleList.forEach(text => {
-            const lineCount = Math.ceil((text.length || 1) / avgCharsPerLine);
-            totalContentHeight += (lineCount * lineHeight) + itemPaddingY + itemGapY;
-        });
-        const calculatedHeight = headerHeight + totalContentHeight + 100;
-        const finalHeight = Math.min(Math.max(calculatedHeight, 150), 600);
-
-        const existingTextNodeId = sourceNode.data.generatedRationaleNodeId;
-        const existingTextNode = existingTextNodeId ? subflow.findNode(existingTextNodeId) : null;
-
-        if (existingTextNode) {
-            existingTextNode.data.rationales = rationaleList;
-            existingTextNode.data.parent_content = sourceNode.data.content
-            existingTextNode.data.title = title
-            console.log(sourceNode.data.content)
-            if (!existingTextNode.dimensions) existingTextNode.dimensions = { width: 250, height: 0 };
-            existingTextNode.dimensions.height = finalHeight;
-        } else {
-            const newTextNode = {
-                id: `sub-text-node-${props.nodeId}-${subNodeIdCounter.value++}`, type: 'text',
-                position: { x: position.x, y: position.y-400 + TEXT_NODE_OFFSET_Y },
-                width: 420, height: finalHeight+100, 
-                
-                data: { rationales: rationaleList,
-                  parent_content : sourceNode.data.content,
-                  title: title
-                 },
-            };
-            console.log(sourceNode.data.content)
-            const newEdge = {
-                id: `sub-content-edge-${newTextNode.id}-to-${sourceNode.id}`, source: newTextNode.id, target: sourceNode.id,
-                sourceHandle: 'bottom', targetHandle: 'top', type: 'smoothstep', animated: true,
-            };
-            sourceNode.data.generatedRationaleNodeId = newTextNode.id;
-            subflow.addNodes([newTextNode]);
-            subflow.addEdges([newEdge]);
-        }
-    } catch (error) {
-        console.error("Error generating rationale:", error);
-        alert(`Failed to generate rationale: ${error.message}`);
-    } finally {
-        isGeneratingRationaleNodeId.value = null;
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch or parse error response' }));
+      throw new Error(errorData.detail);
     }
+
+    const data = await response.json();
+    const title = data.rationale.title;
+    console.log(title)
+    const dataString = JSON.stringify(data.rationale);
+    const regex = /"([^"]+)"|'([^']+)'/g;
+    let matches;
+    const extractedBlocks = [];
+
+    while ((matches = regex.exec(dataString)) !== null) {
+      const content = matches[1] || matches[2];
+      extractedBlocks.push(content);
+    }
+    const rationaleList = extractedBlocks.filter(block => block.length > 25);
+
+    if (rationaleList.length === 0) {
+      console.warn(`No text blocks longer than 15 characters were found inside single or double quotes. Total blocks extracted: ${extractedBlocks.length}`);
+      return;
+    }
+
+    const headerHeight = 35; const itemPaddingY = 24; const itemGapY = 8;
+    const avgCharsPerLine = 35; const lineHeight = 16;
+    let totalContentHeight = 0;
+    rationaleList.forEach(text => {
+      const lineCount = Math.ceil((text.length || 1) / avgCharsPerLine);
+      totalContentHeight += (lineCount * lineHeight) + itemPaddingY + itemGapY;
+    });
+    const calculatedHeight = headerHeight + totalContentHeight + 100;
+    const finalHeight = Math.min(Math.max(calculatedHeight, 150), 600);
+
+    const existingTextNodeId = sourceNode.data.generatedRationaleNodeId;
+    const existingTextNode = existingTextNodeId ? subflow.findNode(existingTextNodeId) : null;
+
+    if (existingTextNode) {
+      existingTextNode.data.rationales = rationaleList;
+      existingTextNode.data.parent_content = sourceNode.data.content
+      existingTextNode.data.title = title
+      console.log(sourceNode.data.content)
+      if (!existingTextNode.dimensions) existingTextNode.dimensions = { width: 250, height: 0 };
+      existingTextNode.dimensions.height = finalHeight;
+    } else {
+      const newTextNode = {
+        id: `sub-text-node-${props.nodeId}-${subNodeIdCounter.value++}`, type: 'text',
+        position: { x: position.x, y: position.y - 400 + TEXT_NODE_OFFSET_Y },
+        width: 420, height: finalHeight + 100,
+
+        data: {
+          rationales: rationaleList,
+          parent_content: sourceNode.data.content,
+          title: title
+        },
+      };
+      console.log(sourceNode.data.content)
+      const newEdge = {
+        id: `sub-content-edge-${newTextNode.id}-to-${sourceNode.id}`, source: newTextNode.id, target: sourceNode.id,
+        sourceHandle: 'bottom', targetHandle: 'top', type: 'smoothstep', animated: true,
+      };
+      sourceNode.data.generatedRationaleNodeId = newTextNode.id;
+      subflow.addNodes([newTextNode]);
+      subflow.addEdges([newEdge]);
+    }
+  } catch (error) {
+    console.error("Error generating rationale:", error);
+    alert(`Failed to generate rationale: ${error.message}`);
+  } finally {
+    isGeneratingRationaleNodeId.value = null;
+  }
 }
 async function handleSubCanvasRun() {
   if (isSubCanvasRunning.value) return;
@@ -765,17 +800,17 @@ async function handleSubCanvasRun() {
     const allEdges = subflow.getEdges.value;
     const nodesToRemove = allNodes.filter(n => (n.type === 'chain' && !n.data.isManual) || n.type === 'text');
     if (nodesToRemove.length > 0) {
-        const nodeIdsToRemove = nodesToRemove.map(n => n.id);
-        const edgesToRemove = allEdges.filter(e => nodeIdsToRemove.includes(e.source) || nodeIdsToRemove.includes(e.target));
-        if (edgesToRemove.length > 0) subflow.removeEdges(edgesToRemove.map(e => e.id));
-        subflow.removeNodes(nodeIdsToRemove);
+      const nodeIdsToRemove = nodesToRemove.map(n => n.id);
+      const edgesToRemove = allEdges.filter(e => nodeIdsToRemove.includes(e.source) || nodeIdsToRemove.includes(e.target));
+      if (edgesToRemove.length > 0) subflow.removeEdges(edgesToRemove.map(e => e.id));
+      subflow.removeNodes(nodeIdsToRemove);
     }
-    const url = "/api/generate-thinking-chain";
+    const url = "http://localhost:7001/generate-thinking-chain";
     const payload = {
       design_background: props.designBackground, design_goal: props.designGoal,
-      parent_node_content: props.parentNodeContent, parent_node_title : props.parentNodeTitle,
+      parent_node_content: props.parentNodeContent, parent_node_title: props.parentNodeTitle,
       //instruction: userInstruction, 
-      goal: userGoal, project_id:props.userId,
+      goal: userGoal, project_id: props.userId,
     };
     const response = await fetch(url, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
@@ -795,7 +830,7 @@ async function handleSubCanvasRun() {
   }
 }
 function onEdgeDeleteInSubCanvas(edgeId) {
-    subflow.removeEdges([edgeId]);
+  subflow.removeEdges([edgeId]);
 }
 
 const subCanvasEl = ref(null);
@@ -836,80 +871,60 @@ onUnmounted(() => {
       <div class="sub-canvas-header" @mousedown="onHeaderMouseDown">
         <span class="title">✏️ {{ nodeName }}</span>
         <div class="header-actions">
-           <button class="save-btn" @click="handleSaveButton" :disabled="isSaveButtonRunning || isSaved" title="Save this LLM Chain">
+          <button class="save-btn" @click="handleSaveButton" :disabled="isSaveButtonRunning || isSaved"
+            title="Save this LLM Chain">
             <div v-if="isSaveButtonRunning" class="spinner"></div>
             <span v-else>Save</span>
           </button>
-          <button @click="emit('close', { nodes: subflow.getNodes.value, edges: subflow.getEdges.value, isSaved: isSaved.valueOf })"  class="close-btn" title="Close Canvas">×</button>
+          <button
+            @click="emit('close', { nodes: subflow.getNodes.value, edges: subflow.getEdges.value, isSaved: isSaved.valueOf })"
+            class="close-btn" title="Close Canvas">×</button>
         </div>
       </div>
       <div class="upper-area">
         <div class="sub-canvas-fields">
-          <label for="goal">Goal：           </label>
+          <label for="goal">Goal： </label>
           <div class="field">
-            
+
             <textarea id="goal" v-model="goal" @blur="onFieldBlur" :placeholder="'描述需要探索或解决什么问题'" rows="3"></textarea>
           </div>
-        <!--  <div class="field">
+          <!--  <div class="field">
             <label for="instruction">Instruction</label>
             <textarea id="instruction" v-model="instruction" @blur="onFieldBlur" :placeholder="'描述你希望的LLM思考或推理如何进行，例如头脑风暴、更多可能性、转变性视角、对比等等'" rows="3"></textarea>
           </div>-->
         </div>
 
         <div class="run-button-wrapper">
-          <button ref="runBtnRef" class="run-btn" @click="handleSubCanvasRun" :disabled="isSubCanvasRunning" title="Run Sub-Canvas Logic">
-            
+          <button ref="runBtnRef" class="run-btn" @click="handleSubCanvasRun" :disabled="isSubCanvasRunning"
+            title="Run Sub-Canvas Logic">
+
             <div v-if="isSubCanvasRunning" class="spinner"></div>
             <span v-else>Generate</span>
-            
+
           </button>
         </div>
       </div>
       <div class="sub-canvas-content">
-        <VueFlow
-        :id="props.nodeId"
-        v-model:nodes="nodes"
-        v-model:edges="edges"
-        :fit-view-on-init="true"
-        :min-zoom="0.2" 
-        class="sub-flow"
-        ref="vueFlowRef"
-        @connect="onSubCanvasConnect"
-        >
+        <VueFlow :id="props.nodeId" v-model:nodes="nodes" v-model:edges="edges" :fit-view-on-init="true" :min-zoom="0.2"
+          class="sub-flow" ref="vueFlowRef" @connect="onSubCanvasConnect">
           <template #node-group="groupProps">
-            <GroupNode
-              v-bind="groupProps"
-              @delete="subflow.removeNodes([$event])"
-            />
+            <GroupNode v-bind="groupProps" @delete="subflow.removeNodes([$event])" />
           </template>
           <template #node-rating="props">
-            <RatingNode
-              v-bind="props"
-              @close="handleRatingClose"
-              @submit="handleRatingSubmit"
-            />
+            <RatingNode v-bind="props" @close="handleRatingClose" @submit="handleRatingSubmit" />
           </template>
           <template #node-chain="chainProps">
-            <ChainNode
-              v-bind="chainProps"
-              @delete="subflow.removeNodes([$event])"
-              @add-text-node="handleGenerateTextNode"
-              @update-content="handleChainNodeContentUpdate"
-              :is-generating-rationale="isGeneratingRationaleNodeId === chainProps.id"
-            />
+            <ChainNode v-bind="chainProps" @delete="subflow.removeNodes([$event])"
+              @add-text-node="handleGenerateTextNode" @update-content="handleChainNodeContentUpdate"
+              :is-generating-rationale="isGeneratingRationaleNodeId === chainProps.id" />
           </template>
           <template #edge-custom="props">
-              <CustomEdge v-bind="props" @delete-edge="onEdgeDeleteInSubCanvas" />
+            <CustomEdge v-bind="props" @delete-edge="onEdgeDeleteInSubCanvas" />
           </template>
-            <template #node-text="textProps">
-            <TextNode
-              v-bind="textProps"
-              @update-node-data="handleNodeDataUpdate"
-              @regenerate="handleTextNodeSendData"
-              @create-node-from-text="handleCreateNodeFromText($event, textProps)"
-              @delete="handleDeleteTextNode"
-              @to-main-canvas="handleCreateNodeOnMain(textProps)"
-            />
+          <template #node-text="textProps">
+            <TextNode v-bind="textProps" @update-node-data="handleNodeDataUpdate" @regenerate="handleTextNodeSendData"
+              @create-node-from-text="handleCreateNodeFromText($event, textProps)" @delete="handleDeleteTextNode"
+              @to-main-canvas="handleCreateNodeOnMain(textProps)" />
           </template>
 
           <Background />
@@ -917,19 +932,14 @@ onUnmounted(() => {
         </VueFlow>
       </div>
       <div class="subcanvas-toolbar-container">
-        <Toolbar
-        :is-add-group="isAddingGroup"
-        :is-adding-node="isAddingNode"
-        :is-show="isShowingRunNode"
-        v-model:activeColor="newNodeColor"
-         @toggle-add-group-mode="toggleAddGroupMode"
-         @toggle-add-node-mode="toggleAddNodeMode"
-         :show-rate-button="true"
-         @rate-clicked="handleShowSubCanvasRating"
-         />
+        <Toolbar :is-add-group="isAddingGroup" :is-adding-node="isAddingNode" :is-show="isShowingRunNode"
+          v-model:activeColor="newNodeColor" @toggle-add-group-mode="toggleAddGroupMode"
+          @toggle-add-node-mode="toggleAddNodeMode" :show-rate-button="true"
+          @rate-clicked="handleShowSubCanvasRating" />
       </div>
     </div>
-    <EditModal :show="isEditModalVisible" :node-data="editingNode" @close="isEditModalVisible = false" @save="handleNodeSave" />
+    <EditModal :show="isEditModalVisible" :node-data="editingNode" @close="isEditModalVisible = false"
+      @save="handleNodeSave" />
   </div>
 
 </template>
@@ -948,6 +958,7 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
 }
+
 .sub-canvas-window {
   width: 85vw;
   height: 90vh;
@@ -959,6 +970,7 @@ onUnmounted(() => {
   position: absolute;
   border: 1px solid #dee2e6;
 }
+
 .sub-canvas-header {
   padding: 6px 12px;
   background-color: #f8f9fa;
@@ -971,15 +983,18 @@ onUnmounted(() => {
   cursor: move;
   user-select: none;
 }
+
 .sub-canvas-header .title {
   font-weight: 600;
   color: #343a40;
 }
+
 .header-actions {
   display: flex;
   align-items: center;
   gap: 15px;
 }
+
 .close-btn {
   background: none;
   border: none;
@@ -991,33 +1006,44 @@ onUnmounted(() => {
   padding: 0 5px;
   line-height: 1;
 }
+
 .close-btn:hover {
   color: #e74c3c;
   transform: scale(1.1);
 }
+
 .upper-area {
   display: flex;
   flex-direction: row;
-  align-items: center; /* Vertically align children */
+  align-items: center;
+  /* Vertically align children */
   border-bottom: 1px solid #e9ecef;
   padding: 15px 20px;
   gap: 15px;
 }
+
 .sub-canvas-fields {
-  flex-grow: 1; /* Allow this section to take up available space */
+  flex-grow: 1;
+  /* Allow this section to take up available space */
   display: flex;
-  align-items: center; /* Align label and textarea wrapper */
+  align-items: center;
+  /* Align label and textarea wrapper */
   gap: 10px;
 }
+
 .field {
-  width: 100%; /* Make the textarea's wrapper take full width of its parent */
+  width: 100%;
+  /* Make the textarea's wrapper take full width of its parent */
 }
+
 .field label {
   font-weight: 600;
   font-size: 13px;
   color: #495057;
-  white-space: nowrap; /* Prevent label from wrapping */
+  white-space: nowrap;
+  /* Prevent label from wrapping */
 }
+
 .field textarea {
   width: 100%;
   padding: 8px 12px;
@@ -1027,15 +1053,17 @@ onUnmounted(() => {
   font-size: 11px;
   resize: vertical;
   min-height: 40px;
-  height : 40px;
+  height: 40px;
   box-sizing: border-box;
 }
+
 .field textarea:focus {
   outline: none;
   border-color: #80bdff;
   box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, .25);
 }
-.run-button-wrapper{
+
+.run-button-wrapper {
   /* This wrapper is now just a simple container */
   display: flex;
   align-items: center;
@@ -1055,7 +1083,9 @@ onUnmounted(() => {
   font-size: 13px;
   height: 40px;
 }
-.save-btn, .run-btn {
+
+.save-btn,
+.run-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1069,32 +1099,38 @@ onUnmounted(() => {
   height: 30px;
   font-weight: 600;
 }
+
 .save-btn {
   border: 1px solid #007bff;
   background-color: #007bff;
   color: white;
-  
+
   width: 60px;
 }
+
 .save-btn:hover:not(:disabled) {
   background-color: #0056b3;
   border-color: #0056b3;
 }
+
 .save-btn:disabled {
   background-color: #6c757d;
   border-color: #6c757d;
   cursor: not-allowed;
 }
+
 .run-btn {
   border: 1px solid #5661F6;
   background-color: #5661F6;
   color: white;
   min-width: 80px;
 }
+
 .run-btn:hover:not(:disabled) {
   background-color: #323ee6;
   border-color: #1e7e34;
 }
+
 .run-btn:disabled {
   background-color: #6c757d;
   border-color: #6c757d;
@@ -1110,14 +1146,22 @@ onUnmounted(() => {
   height: 16px;
   animation: spin 1s linear infinite;
 }
+
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
+
 .sub-canvas-content {
   flex-grow: 1;
   position: relative;
 }
+
 .sub-flow {
   border-bottom-left-radius: 11px;
   border-bottom-right-radius: 11px;
@@ -1135,7 +1179,7 @@ onUnmounted(() => {
   bottom: 0;
   left: 38%;
   width: 30%;
-  height: 12%; 
+  height: 12%;
   display: flex;
   justify-content: flex-start;
   align-items: center;
@@ -1145,8 +1189,8 @@ onUnmounted(() => {
 }
 
 .subcanvas-toolbar-container :deep(.toolbar-container) {
-  justify-content: center; 
-  position: relative;     
+  justify-content: center;
+  position: relative;
 }
 
 /* 将 Rate 按钮部分定位到其父容器（即带圆角的 Toolbar）的右侧 */

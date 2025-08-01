@@ -438,9 +438,9 @@ function handleMouseUp() {
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  min-height: 95px;
+  min-height: 70px;
   padding: 12px;
-  padding-bottom: 36px; /* Reserve space for action buttons */
+  padding-bottom: 3px; /* Reserve space for action buttons */
   cursor: text;
   font-size: 13px; /* Restored for readability */
   line-height: 1.5;
@@ -465,6 +465,7 @@ function handleMouseUp() {
   width: 100%;
   box-sizing: border-box;
   resize: none;
+
   overflow-y: auto;
   font-family: inherit;
   font-size: 13px; /* Restored for readability */
@@ -472,7 +473,7 @@ function handleMouseUp() {
   line-height: 1.5;
 
   /* Visuals and Sizing */
-  height: 150px;
+  height: 80px;
   background-color: #eff6ff;
   border: none; /* The box-shadow acts as the border */
   border-radius: 8px;
